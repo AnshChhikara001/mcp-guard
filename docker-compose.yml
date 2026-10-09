@@ -1,0 +1,22 @@
+# Local development only. Production Postgres is Neon (see docs/adr/0004).
+name: mcp-guard
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mcpguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcpguard}
+      POSTGRES_DB: ${POSTGRES_DB:-mcpguard}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  postgres-data:
