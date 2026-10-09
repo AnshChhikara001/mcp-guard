@@ -29,6 +29,9 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "A"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["mcp_guard"]
+
 [tool.pyright]
 typeCheckingMode = "strict"
 venvPath = "."

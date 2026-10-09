@@ -1,4 +1,4 @@
-.PHONY: install db db-stop lint typecheck test check
+.PHONY: install db db-stop reset-bank lint typecheck test check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
@@ -10,6 +10,10 @@ db:
 
 db-stop:
 	docker compose stop postgres
+
+# Restore the fake bank in Postgres (DATABASE_URL, default local) to its seeded state
+reset-bank:
+	uv run $(if $(wildcard .env),--env-file .env) bank-reset
 
 lint:
 	uv run ruff check .

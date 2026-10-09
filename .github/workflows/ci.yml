@@ -10,6 +10,22 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: mcpguard
+          POSTGRES_PASSWORD: mcpguard
+          POSTGRES_DB: mcpguard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mcpguard -d mcpguard"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://mcpguard:mcpguard@localhost:5432/mcpguard
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0

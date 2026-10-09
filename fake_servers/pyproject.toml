@@ -3,7 +3,13 @@ name = "mcp-guard-fake-servers"
 version = "0.1.0"
 description = "The six fake bank MCP servers, with seeded data."
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "faker>=40.41.0",
+    "psycopg[binary]>=3.3.6",
+]
+
+[project.scripts]
+bank-reset = "mcp_guard.fake_servers.reset:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
