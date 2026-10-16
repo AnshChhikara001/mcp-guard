@@ -3,7 +3,10 @@ name = "mcp-guard-gateway"
 version = "0.1.0"
 description = "The Gateway: an MCP server towards Agents that decides every Tool call."
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "en-core-web-sm==3.8.0",
+    "presidio-analyzer>=2.2.364",
+]
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
@@ -11,3 +14,6 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "mcp_guard.gateway"
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
