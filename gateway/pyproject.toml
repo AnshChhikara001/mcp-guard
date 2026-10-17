@@ -5,8 +5,13 @@ description = "The Gateway: an MCP server towards Agents that decides every Tool
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "en-core-web-md==3.8.0",
+    "mcp>=2.3.0",
     "presidio-analyzer>=2.2.364",
+    "uvicorn>=0.54.0",
 ]
+
+[project.scripts]
+mcp-guard-gateway = "mcp_guard.gateway.server:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]

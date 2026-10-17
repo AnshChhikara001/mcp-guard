@@ -42,6 +42,7 @@ addopts = ["--import-mode=importlib", "--strict-markers"]
 
 [dependency-groups]
 dev = [
+    "psutil>=7.2.2",
     "pyright[nodejs]>=1.1.414",
     "pytest>=9.1.1",
     "ruff>=0.16.10",

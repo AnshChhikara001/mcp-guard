@@ -5,6 +5,7 @@ description = "The six fake bank MCP servers, with seeded data."
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "faker>=40.41.0",
+    "mcp>=2.3.0",
     "psycopg[binary]>=3.3.6",
 ]
 

@@ -1,4 +1,4 @@
-.PHONY: install db db-stop reset-bank lint typecheck test check
+.PHONY: install db db-stop reset-bank gateway lint typecheck test check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
@@ -14,6 +14,10 @@ db-stop:
 # Restore the fake bank in Postgres (DATABASE_URL, default local) to its seeded state
 reset-bank:
 	uv run $(if $(wildcard .env),--env-file .env) bank-reset
+
+# Run the Gateway at http://127.0.0.1:8000/mcp, with the fake bank servers behind it
+gateway:
+	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-gateway
 
 lint:
 	uv run ruff check .
