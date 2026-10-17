@@ -3,7 +3,17 @@ name = "mcp-guard-agent"
 version = "0.1.0"
 description = "The demo Agent that reaches its tools only through the Gateway."
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "anyio>=4.15.1",
+    "langchain-core>=1.6.12",
+    "langgraph>=1.2.16",
+    "langgraph-checkpoint-postgres>=3.2.0",
+    "mcp>=2.3.0",
+    "psycopg[binary]>=3.3.6",
+]
+
+[project.scripts]
+mcp-guard-chat = "mcp_guard.agent.chat:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]

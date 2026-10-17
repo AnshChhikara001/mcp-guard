@@ -2,7 +2,7 @@
 
 import psutil
 
-from .conftest import RunningGateway
+from conftest import RunningGateway
 
 
 def test_only_the_gateway_listens_and_the_accounts_server_has_no_port(

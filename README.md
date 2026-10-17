@@ -25,6 +25,7 @@ make install           # Python 3.13, all packages and dev tools, from uv.lock
 make db                # local Postgres on localhost:5432
 make reset-bank        # load the seeded fake bank into Postgres (also restores it later)
 make gateway           # the Gateway at http://127.0.0.1:8000/mcp, with the fake bank servers behind it
+make chat              # in a second terminal: chat with the Agent as Customer C001 (CUSTOMER=, CONVERSATION=)
 make check             # ruff, pyright (strict) and pytest, as CI runs them; tests need make db
 ```
 
@@ -43,6 +44,14 @@ The Gateway is an MCP server (streamable HTTP at `/mcp`) that any MCP client can
 | accounts | `get_customer_profile`, `list_accounts`, `get_balance` |
 
 The Seam 1 tests in `gateway/tests/` start the real Gateway against a freshly seeded database and call it as an MCP client.
+
+## Agent
+
+The Agent is a LangGraph loop: the model sees the conversation and the Gateway's tools, asks for Tool calls, the Agent makes them through the Gateway (its only way to reach a tool), and the model replies once it has what it needs. Conversations are stored in Postgres by the LangGraph checkpointer, keyed by conversation ID, so `make chat CONVERSATION=<id>` carries one on after the chat was closed.
+
+The model sits behind one small interface ([`model.py`](agent/src/mcp_guard/agent/model.py)). For now the only model is a scripted fake ([`fake_model.py`](agent/src/mcp_guard/agent/fake_model.py)) that answers balance questions the way a real model would, with no API key and no cost. Try "What's my balance?", then "What was that in paise?".
+
+The Seam 2 tests in `agent/tests/` drive whole conversations with the fake model through the real Gateway, including the terminal chat as its own process.
 
 ## License
 

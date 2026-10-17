@@ -6,7 +6,7 @@ import pytest
 from mcp import Client, StdioServerParameters
 from mcp.types import TextContent
 
-from .conftest import RunningGateway
+from conftest import RunningGateway
 
 pytestmark = pytest.mark.anyio
 

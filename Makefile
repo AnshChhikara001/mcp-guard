@@ -1,4 +1,4 @@
-.PHONY: install db db-stop reset-bank gateway lint typecheck test check
+.PHONY: install db db-stop reset-bank gateway chat lint typecheck test check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
@@ -18,6 +18,12 @@ reset-bank:
 # Run the Gateway at http://127.0.0.1:8000/mcp, with the fake bank servers behind it
 gateway:
 	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-gateway
+
+# Chat with the Agent in the terminal as one Customer, with the scripted fake model (needs make gateway).
+# make chat CUSTOMER=C001 [CONVERSATION=<id from an earlier chat>]
+CUSTOMER ?= C001
+chat:
+	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-chat --customer $(CUSTOMER) $(if $(CONVERSATION),--conversation $(CONVERSATION))
 
 lint:
 	uv run ruff check .
