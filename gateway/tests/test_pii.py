@@ -44,6 +44,42 @@ EXAMPLES: tuple[Example, ...] = (
     Example("Credit a/c no. 123456789012 at HDFC", (("IN_BANK_ACCOUNT", "123456789012"),)),
     # Ten digits starting with 9 could be a phone; the word "acct" says it's an account.
     Example("Transfer to acct 9876543210 today", (("IN_BANK_ACCOUNT", "9876543210"),)),
+    # Messy cases written separately from the rules, the way Customers type and tools return.
+    Example("my number is 98201 45763, please call me back", (("IN_PHONE", "98201 45763"),)),
+    Example("You can reach me at +91 98450 12376 after 5 pm", (("IN_PHONE", "+91 98450 12376"),)),
+    Example(
+        "My mobile is 9876543210 and my refund is still pending", (("IN_PHONE", "9876543210"),)
+    ),
+    Example("Please verify my PAN AFZPK7190K", (("IN_PAN", "AFZPK7190K"),)),
+    Example(
+        "Call me on 98201-45763 and check my PAN AFZPK7190K",
+        (("IN_PHONE", "98201-45763"), ("IN_PAN", "AFZPK7190K")),
+    ),
+    Example(
+        "I changed my phone number to 9810012345. Please update my account.",
+        (("IN_PHONE", "9810012345"),),
+    ),
+    Example("Customer contact: (98765) 43210", (("IN_PHONE", "(98765) 43210"),)),
+    Example('{"phone":"+91 9845012376"}', (("IN_PHONE", "+91 9845012376"),)),
+    Example(
+        '{"customer":{"mobile":"9876543210","pan":"AFZPK7190K"}}',
+        (("IN_PHONE", "9876543210"), ("IN_PAN", "AFZPK7190K")),
+    ),
+    Example(
+        '{"message":"Please call me at 9810012345","ticket_id":"TKT-20261017-042"}',
+        (("IN_PHONE", "9810012345"),),
+    ),
+    Example(
+        '{"contact":"+91-98201-45763","refund_amount":2500}', (("IN_PHONE", "+91-98201-45763"),)
+    ),
+    Example(
+        '{"customer_note":"My PAN is ABCDE1234F; refund not received"}',
+        (("IN_PAN", "ABCDE1234F"),),
+    ),
+    Example(
+        "Please call 98201 45763 about order ORD-123456 for a refund of Rs. 2500",
+        (("IN_PHONE", "98201 45763"),),
+    ),
 )
 
 # Texts that look like an identifier but aren't one, so nothing should be found.
@@ -59,6 +95,13 @@ LOOK_ALIKES: tuple[Example, ...] = (
     Example("Order 4021886519 shipped on 12/03/2026", ()),  # digits, but no account context
     Example("Ticket TK001 for customer C001, transaction T00012, account A001", ()),
     Example("Refund of Rs 25000 approved", ()),
+    # Messy cases written separately from the rules.
+    Example("My Aadhaar number is 2345 6789 0123", ()),  # fails the Verhoeff check
+    Example("Order ID ORD-9820145763 is still pending", ()),  # digits glued to an ID prefix
+    Example("Ticket #9876543210 was closed yesterday", ()),
+    Example("The refund amount is Rs. 98,201.45", ()),
+    Example("Transaction of INR 9,876,543.21 failed", ()),
+    Example("The order was placed on 17/10/2026", ()),
 )
 
 
@@ -82,6 +125,17 @@ def test_finds_each_identifier_with_the_right_entity_type(
 @pytest.mark.parametrize("example", LOOK_ALIKES, ids=lambda e: e.text)
 def test_does_not_find_look_alikes(detector: PiiDetector, example: Example) -> None:
     assert found_in(detector, example.text) == ()
+
+
+def test_bare_ten_digits_starting_6_to_9_count_as_a_phone_even_when_they_are_not(
+    detector: PiiDetector,
+) -> None:
+    # A known false alarm we accept: nothing here says it isn't a phone. Missing a Customer's
+    # phone would leak it to the model, while a wrongly made Pseudonym still works, since the
+    # Gateway restores the real value when the Agent passes it into a Tool call.
+    text = "Invoice number 9820145763 needs correction"
+
+    assert found_in(detector, text) == (("IN_PHONE", "9820145763"),)
 
 
 def test_every_identifier_has_an_example() -> None:

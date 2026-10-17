@@ -68,14 +68,16 @@ def _recognizers() -> list[EntityRecognizer]:
             ["ifsc", "branch", "neft", "rtgs", "imps"],
         ),
         # An Indian mobile number has 10 digits starting with 6-9, optionally after +91 or 0,
-        # often split 5 + 5. Landlines aren't covered. Bare 10 digits still count as a phone,
-        # since missing a Customer's phone leaks it, but score just low enough that an account
+        # often split 5 + 5, sometimes with the first 5 in brackets. Digits glued to "-" or "#"
+        # are part of an ID ("ORD-9820145763"). Landlines aren't covered. Bare 10 digits count
+        # as a phone even with no word like "phone" nearby, since missing a Customer's phone
+        # leaks it while a wrong Pseudonym is harmless, but score just low enough that an account
         # number backed by a word like "account" wins where the two overlap.
         _pattern_recognizer(
             "IN_PHONE",
             [
-                (r"(?<![\w+])(?:\+91|0091)[\s-]?[6-9]\d{4}[\s-]?\d{5}\b", 0.7),
-                (r"(?<![\w+])0?[6-9]\d{4}[\s-]?\d{5}\b", 0.4),
+                (r"(?<![\w+#-])(?:\+91|0091)[\s-]?[6-9]\d{4}[\s-]?\d{5}\b", 0.7),
+                (r"(?<![\w+#-])(?:0?[6-9]\d{4}|\(0?[6-9]\d{4}\))[\s-]?\d{5}\b", 0.4),
             ],
             ["phone", "mobile", "call", "contact", "whatsapp", "sms", "otp"],
         ),
