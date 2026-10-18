@@ -5,7 +5,10 @@ description = "The demo Agent that reaches its tools only through the Gateway."
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "anyio>=4.15.1",
+    "httpx>=0.28.1",
     "langchain-core>=1.6.12",
+    "langchain-google-genai>=4.4.2",
+    "langchain-openai>=1.7.2",
     "langgraph>=1.2.16",
     "langgraph-checkpoint-postgres>=3.2.0",
     "mcp>=2.3.0",

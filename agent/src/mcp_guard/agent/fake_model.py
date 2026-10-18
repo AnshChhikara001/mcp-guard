@@ -26,6 +26,9 @@ class ScriptedModel:
             # A real model can only call the tools it was offered.
             if call["name"] not in offered:
                 raise ValueError(f"The script called {call['name']!r}, which was not offered")
+        if message.usage_metadata is None:
+            # Nothing is sent to a provider, so no tokens are used.
+            message.usage_metadata = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         return message
 
 

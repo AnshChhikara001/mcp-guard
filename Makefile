@@ -19,8 +19,9 @@ reset-bank:
 gateway:
 	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-gateway
 
-# Chat with the Agent in the terminal as one Customer, with the scripted fake model (needs make gateway).
-# make chat CUSTOMER=C001 [CONVERSATION=<id from an earlier chat>]
+# Chat with the Agent in the terminal as one Customer (needs make gateway). The model is MODEL,
+# e.g. gemini:gemini-2.5-flash (see .env.example); without it, the scripted fake model.
+# make chat CUSTOMER=C001 [CONVERSATION=<id from an earlier chat>] [MODEL=<provider:model>]
 CUSTOMER ?= C001
 chat:
 	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-chat --customer $(CUSTOMER) $(if $(CONVERSATION),--conversation $(CONVERSATION))

@@ -1,9 +1,12 @@
-"""Chat with the Agent in the terminal, as one Customer, using the scripted fake model.
+"""Chat with the Agent in the terminal, as one Customer.
 
 Run it with `make chat`, or `uv run mcp-guard-chat --customer C001`. The Gateway must be
 running (`make gateway`). GATEWAY_URL and DATABASE_URL pick where the Gateway and the
-conversation store are. Pass --conversation with an earlier ID to carry that conversation
-on, even after the chat was closed. End the chat with Ctrl-D.
+conversation store are. MODEL picks the model, as `provider:model` (for example
+`gemini:gemini-2.5-flash`); without it, the scripted fake model answers.
+MODEL_ADAPTERS_FILE names a Python file outside the repository with further providers.
+Pass --conversation with an earlier ID to carry that conversation on, even after the chat
+was closed. End the chat with Ctrl-D.
 """
 
 import argparse
@@ -13,8 +16,10 @@ import uuid
 import anyio
 import anyio.to_thread
 
+from mcp_guard.agent.adapters import load_model
 from mcp_guard.agent.agent import start_agent
 from mcp_guard.agent.fake_model import ScriptedModel, balance_script
+from mcp_guard.agent.model import Model, ModelCallFailed
 
 LOCAL_GATEWAY_URL = "http://127.0.0.1:8000/mcp"
 LOCAL_DATABASE_URL = "postgresql://mcpguard:mcpguard@localhost:5432/mcpguard"
@@ -23,8 +28,9 @@ LOCAL_DATABASE_URL = "postgresql://mcpguard:mcpguard@localhost:5432/mcpguard"
 async def chat(customer_id: str, conversation_id: str) -> None:
     gateway_url = os.environ.get("GATEWAY_URL", LOCAL_GATEWAY_URL)
     database_url = os.environ.get("DATABASE_URL", LOCAL_DATABASE_URL)
-    model = ScriptedModel(balance_script(customer_id))
+    model_name, model = _configured_model(customer_id)
     async with start_agent(model, gateway_url, database_url, customer_id=customer_id) as agent:
+        print(f"Model {model_name}.")
         print(f"Conversation {conversation_id}. Carry it on later with --conversation.")
         while True:
             try:
@@ -34,7 +40,17 @@ async def chat(customer_id: str, conversation_id: str) -> None:
                 print()
                 return
             if text.strip():
-                print(f"agent> {await agent.ask(conversation_id, text)}")
+                try:
+                    print(f"agent> {await agent.ask(conversation_id, text)}")
+                except ModelCallFailed as e:
+                    print(f"error> {e}")
+
+
+def _configured_model(customer_id: str) -> tuple[str, Model]:
+    """The model MODEL names, with its name; said at the start so a fallback can't pass unseen."""
+    if name := os.environ.get("MODEL"):
+        return name, load_model(name, os.environ.get("MODEL_ADAPTERS_FILE"))
+    return "scripted fake (MODEL is not set)", ScriptedModel(balance_script(customer_id))
 
 
 def main() -> None:
