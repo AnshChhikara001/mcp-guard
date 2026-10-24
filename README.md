@@ -77,6 +77,21 @@ ADAPTERS = {"local": LocalModel}
 
 The Seam 2 tests in `agent/tests/` drive whole conversations with the fake model through the real Gateway, including the terminal chat as its own process, and check the Gemini and OpenAI adapters against a fake provider API on a local port (no API key, no cost).
 
+## Tracing
+
+Each chat turn is one trace, with OpenTelemetry and its GenAI conventions:
+
+```
+turn                                   (Agent; session.id = the conversation ID)
+├─ chat <model>                        (the model call, with input and output tokens)
+├─ MCP send tools/call list_accounts   (the Agent's Tool call)
+│  └─ tools/call list_accounts         (the Gateway receiving it)
+│     └─ MCP send tools/call ...       (the Gateway calling the downstream server)
+└─ chat <model>
+```
+
+The trace passes from the Agent to the Gateway inside each MCP request (`traceparent` in its `_meta`), which the MCP SDK does itself. The downstream servers aren't traced inside; the Gateway's span for each call to them shows how long they took. Tracing is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so tests send nothing. Any OpenTelemetry backend works; this project uses Langfuse Cloud (see `.env.example` for its endpoint and key header).
+
 ## License
 
 [MIT](LICENSE)
