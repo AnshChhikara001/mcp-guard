@@ -1,6 +1,6 @@
 """The real model adapters, and choosing one by configuration.
 
-A model is named `provider:model`, for example `gemini:gemini-2.5-flash` or
+A model is named `provider:model`, for example `gemini:gemini-3.5-flash` or
 `openai:gpt-5-mini`. Gemini and OpenAI are built in; each reads its API key and base URL
 the way its own SDK does (GOOGLE_API_KEY, else GEMINI_API_KEY; OPENAI_API_KEY). Further
 providers come from a Python file outside the repository that defines
@@ -16,7 +16,12 @@ from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 import httpx
-from langchain_core.exceptions import ModelRateLimitError, ModelTimeoutError
+from langchain_core.exceptions import (
+    ModelError,
+    ModelNotFoundError,
+    ModelRateLimitError,
+    ModelTimeoutError,
+)
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -32,6 +37,9 @@ type ModelFactory = Callable[[str], Model]
 RETRIES = 1
 
 DEFAULT_TIMEOUT_SECONDS = 60
+
+# Providers' error texts can run long; the start says what went wrong.
+ERROR_DETAIL_LENGTH = 200
 
 
 class ChatModelAdapter:
@@ -56,6 +64,17 @@ class ChatModelAdapter:
             raise ModelCallFailed(
                 f"The model {self._name} timed out: it gave no answer within "
                 f"{self._timeout_seconds:g} seconds per attempt. Try again."
+            ) from e
+        except ModelNotFoundError as e:
+            raise ModelCallFailed(
+                f"There is no model {self._name} for this API key (providers retire old "
+                "models). Pick one the provider lists, in MODEL."
+            ) from e
+        # Anything else the provider refused or failed at, such as an overloaded server.
+        except ModelError as e:
+            raise ModelCallFailed(
+                f"The model {self._name} failed: {str(e)[:ERROR_DETAIL_LENGTH]}. Try again, "
+                "or pick another model in MODEL."
             ) from e
         assert isinstance(reply, AIMessage)
         return reply
@@ -85,7 +104,7 @@ def load_model(name: str, adapters_file: str | None = None) -> Model:
     provider, _, model = name.partition(":")
     if not model:
         raise ValueError(
-            f"Name the model as provider:model (e.g. gemini:gemini-2.5-flash), not {name!r}"
+            f"Name the model as provider:model (e.g. gemini:gemini-3.5-flash), not {name!r}"
         )
     if provider not in providers:
         raise ValueError(

@@ -189,6 +189,33 @@ async def test_adapter_says_clearly_when_the_model_times_out(
     assert "timed out" in str(failure.value)
 
 
+async def test_adapter_says_clearly_when_the_model_does_not_exist(
+    provider: Provider, fake_provider: FakeProvider
+) -> None:
+    retired = {"error": {"code": 404, "message": "Model not found.", "status": "NOT_FOUND"}}
+    fake_provider.replies.append(Reply(retired, status=404))
+    model = load_model(provider.model)
+
+    with pytest.raises(ModelCallFailed) as failure:
+        await model.respond(CONVERSATION, [LIST_ACCOUNTS])
+
+    assert f"There is no model {provider.model}" in str(failure.value)
+
+
+async def test_adapter_says_clearly_when_the_provider_fails(
+    provider: Provider, fake_provider: FakeProvider
+) -> None:
+    overloaded = {"error": {"code": 503, "message": "High demand.", "status": "UNAVAILABLE"}}
+    fake_provider.replies.append(Reply(overloaded, status=503))
+    model = load_model(provider.model)
+
+    with pytest.raises(ModelCallFailed) as failure:
+        await model.respond(CONVERSATION, [LIST_ACCOUNTS])
+
+    assert f"The model {provider.model} failed" in str(failure.value)
+    assert "High demand." in str(failure.value)
+
+
 def test_unknown_provider_names_the_providers_there_are() -> None:
     with pytest.raises(ValueError, match=r"'mistral'.*gemini.*openai"):
         load_model("mistral:large")

@@ -54,11 +54,11 @@ The model sits behind one small interface ([`model.py`](agent/src/mcp_guard/agen
 | `MODEL` | Model | Needs |
 | --- | --- | --- |
 | _(unset)_ | a scripted fake ([`fake_model.py`](agent/src/mcp_guard/agent/fake_model.py)) that answers balance questions the way a real model would | nothing |
-| `gemini:<model>`, e.g. `gemini:gemini-2.5-flash` | Gemini | `GEMINI_API_KEY` |
+| `gemini:<model>`, e.g. `gemini:gemini-3.5-flash` | Gemini | `GEMINI_API_KEY` |
 | `openai:<model>`, e.g. `openai:gpt-5-mini` | OpenAI | `OPENAI_API_KEY` |
 | `<provider>:<model>` | a provider from the Python file named by `MODEL_ADAPTERS_FILE` | whatever that file needs |
 
-For example, `make chat MODEL=gemini:gemini-2.5-flash`, or put `MODEL` and the key in `.env`. Try "What's my balance?", then "What was that in paise?". The Gemini and OpenAI adapters ([`adapters.py`](agent/src/mcp_guard/agent/adapters.py)) give up after `MODEL_TIMEOUT_SECONDS` (default 60) and one retry, and say so plainly when the model timed out or its quota is used up.
+For example, `make chat MODEL=gemini:gemini-3.5-flash`, or put `MODEL` and the key in `.env`. Try "What's my balance?", then "What was that in paise?". The Gemini and OpenAI adapters ([`adapters.py`](agent/src/mcp_guard/agent/adapters.py)) give up after `MODEL_TIMEOUT_SECONDS` (default 60) and one retry, and say so plainly when the model timed out, its quota is used up, the model no longer exists or the provider fails.
 
 `MODEL_ADAPTERS_FILE` lets you plug in another model without touching the repository: the file defines `ADAPTERS`, a dict from a provider name to a function that takes the model name and returns an object with the model interface.
 

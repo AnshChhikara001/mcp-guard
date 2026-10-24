@@ -3,7 +3,7 @@
 Run it with `make chat`, or `uv run mcp-guard-chat --customer C001`. The Gateway must be
 running (`make gateway`). GATEWAY_URL and DATABASE_URL pick where the Gateway and the
 conversation store are. MODEL picks the model, as `provider:model` (for example
-`gemini:gemini-2.5-flash`); without it, the scripted fake model answers.
+`gemini:gemini-3.5-flash`); without it, the scripted fake model answers.
 MODEL_ADAPTERS_FILE names a Python file outside the repository with further providers.
 OTEL_EXPORTER_OTLP_ENDPOINT turns tracing on (see tracing.py).
 Pass --conversation with an earlier ID to carry that conversation on, even after the chat
