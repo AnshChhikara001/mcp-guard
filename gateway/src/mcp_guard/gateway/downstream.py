@@ -19,6 +19,8 @@ PASSED_ENVIRONMENT = ("DATABASE_URL",)
 
 SERVERS: Mapping[str, list[str]] = {
     "accounts": ["-m", "mcp_guard.fake_servers.accounts"],
+    "transactions": ["-m", "mcp_guard.fake_servers.transactions"],
+    "payments": ["-m", "mcp_guard.fake_servers.payments"],
 }
 
 

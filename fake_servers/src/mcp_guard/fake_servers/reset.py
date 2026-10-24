@@ -60,6 +60,29 @@ CREATE TABLE bank.transactions (
     counterparty  text NOT NULL
 );
 
+-- Written by the servers, empty when seeded. IDs are numbered from 1 after every reset.
+CREATE SEQUENCE bank.dispute_numbers;
+CREATE TABLE bank.disputes (
+    id             text PRIMARY KEY
+                   DEFAULT 'D' || lpad(nextval('bank.dispute_numbers')::text, 4, '0'),
+    transaction_id text NOT NULL REFERENCES bank.transactions,
+    reason         text NOT NULL,
+    status         text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+    raised_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX one_open_dispute_per_transaction
+    ON bank.disputes (transaction_id) WHERE status = 'open';
+
+CREATE SEQUENCE bank.refund_numbers;
+CREATE TABLE bank.refunds (
+    id              text PRIMARY KEY
+                    DEFAULT 'R' || lpad(nextval('bank.refund_numbers')::text, 4, '0'),
+    transaction_id  text NOT NULL REFERENCES bank.transactions,
+    amount_paise    bigint NOT NULL CHECK (amount_paise > 0),
+    idempotency_key text NOT NULL UNIQUE,
+    refunded_at     timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE bank.tickets (
     id                text PRIMARY KEY,
     customer_id       text NOT NULL REFERENCES bank.customers,

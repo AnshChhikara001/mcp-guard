@@ -31,7 +31,7 @@ make check             # ruff, pyright (strict) and pytest, as CI runs them; tes
 
 ## Seeded fake bank
 
-The fake bank (Customers, Staff, accounts, transactions and support tickets) is generated with Faker's Indian locale from a fixed seed, so every run produces the same data. It lives in the `bank` schema in Postgres; `make reset-bank` drops that schema and reloads it, restoring the seeded state from any change. All names, numbers and addresses are fake; emails use reserved `example` domains.
+The fake bank (Customers, Staff, accounts, transactions and support tickets) is generated with Faker's Indian locale from a fixed seed, so every run produces the same data. It lives in the `bank` schema in Postgres; `make reset-bank` drops that schema and reloads it, restoring the seeded state from any change, including the disputes and refunds the servers write. All names, numbers and addresses are fake; emails use reserved `example` domains.
 
 Canaries, the unique values whose appearance in an outgoing Tool call proves an exfiltration Attack worked, are the PII of the two test Customers C001 and C002 and their accounts A001 and A002. Their exact places are listed in [`canaries.py`](fake_servers/src/mcp_guard/fake_servers/canaries.py); each value appears nowhere else in the seeded data.
 
@@ -42,6 +42,8 @@ The Gateway is an MCP server (streamable HTTP at `/mcp`) that any MCP client can
 | Server | Tools |
 | --- | --- |
 | accounts | `get_customer_profile`, `list_accounts`, `get_balance` |
+| transactions | `list_transactions`, `raise_dispute` (one open dispute per transaction) |
+| payments | `refund` (needs an idempotency key: repeating it with the same key pays nothing more) |
 
 The Seam 1 tests in `gateway/tests/` start the real Gateway against a freshly seeded database and call it as an MCP client.
 

@@ -11,20 +11,30 @@ from conftest import RunningGateway
 pytestmark = pytest.mark.anyio
 
 
-async def test_client_sees_the_accounts_tools_as_the_gateways_own(gateway: RunningGateway) -> None:
+async def test_client_sees_the_bank_servers_tools_as_the_gateways_own(
+    gateway: RunningGateway,
+) -> None:
     async with Client(gateway.url) as client:
         listing = await client.list_tools()
 
-    assert {"get_customer_profile", "list_accounts", "get_balance"} <= {
-        tool.name for tool in listing.tools
-    }
+    assert {
+        "get_customer_profile",
+        "list_accounts",
+        "get_balance",
+        "list_transactions",
+        "raise_dispute",
+        "refund",
+    } <= {tool.name for tool in listing.tools}
 
 
-async def test_tool_definitions_reach_the_client_unchanged(gateway: RunningGateway) -> None:
-    accounts_server = StdioServerParameters(
-        command=sys.executable, args=["-m", "mcp_guard.fake_servers.accounts"]
+@pytest.mark.parametrize("server", ["accounts", "transactions", "payments"])
+async def test_tool_definitions_reach_the_client_unchanged(
+    gateway: RunningGateway, server: str
+) -> None:
+    direct_server = StdioServerParameters(
+        command=sys.executable, args=["-m", f"mcp_guard.fake_servers.{server}"]
     )
-    async with Client(accounts_server) as direct, Client(gateway.url) as through_gateway:
+    async with Client(direct_server) as direct, Client(gateway.url) as through_gateway:
         expected = (await direct.list_tools()).tools
         listed = (await through_gateway.list_tools()).tools
 

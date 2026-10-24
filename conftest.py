@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psycopg
 import pytest
+from mcp.types import CallToolResult, TextContent
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
@@ -82,6 +83,27 @@ def gateway(seeded_database_url: str) -> Iterator[RunningGateway]:
     """The Gateway, started the way it runs for real, listening on a free local port."""
     with start_gateway(seeded_database_url) as running:
         yield running
+
+
+@pytest.fixture(scope="module")
+def _writable_bank() -> Iterator[tuple[str, RunningGateway]]:
+    """A seeded database and a Gateway over it, shared by one module's writing tests."""
+    with temporary_database() as url:
+        reset(url)
+        with start_gateway(url) as running:
+            yield url, running
+
+
+@pytest.fixture
+def writable_gateway(_writable_bank: tuple[str, RunningGateway]) -> RunningGateway:
+    """A Gateway over a bank reset to its seeded state before each test, for tests that write.
+
+    The servers open a fresh database connection for every Tool call, so resetting the bank
+    under a running Gateway is safe.
+    """
+    url, running = _writable_bank
+    reset(url)
+    return running
 
 
 @contextmanager
@@ -181,3 +203,10 @@ def fake_provider() -> Iterator[FakeProvider]:
     finally:
         server.shutdown()
         server.server_close()
+
+
+def error_message(result: CallToolResult) -> str:
+    """The text of a Tool call result that must be an error."""
+    assert result.is_error
+    [message] = [c.text for c in result.content if isinstance(c, TextContent)]
+    return message
