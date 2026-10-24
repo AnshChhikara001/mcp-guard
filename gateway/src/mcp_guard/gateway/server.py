@@ -5,9 +5,15 @@ to the server that owns the tool. There is no Decision yet: every call is allowe
 
 Run it with `make gateway`, or `uv run mcp-guard-gateway` (GATEWAY_HOST and GATEWAY_PORT
 pick the address; the default is http://127.0.0.1:8000/mcp).
+
+The MCP SDK traces every Tool call: a span for the call the Gateway receives, joined to the
+caller's trace through the request's `_meta`, and inside it a span for the call to the
+downstream server. They are sent only if tracing is configured (see tracing.py).
 """
 
 import os
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 import uvicorn
 from mcp.server import Server, ServerRequestContext
@@ -21,6 +27,7 @@ from mcp.types import (
 from starlette.applications import Starlette
 
 from mcp_guard.gateway.downstream import Downstream, connect
+from mcp_guard.gateway.tracing import start_tracing, stop_tracing
 
 
 async def list_tools(
@@ -40,11 +47,21 @@ async def call_tool(
     return await downstream.call_tool(params.name, params.arguments)
 
 
+@asynccontextmanager
+async def lifespan(_: Server[Downstream]) -> AsyncGenerator[Downstream]:
+    try:
+        async with connect() as downstream:
+            yield downstream
+    finally:
+        # uvicorn ends the process with the signal that stopped it, so exit hooks never run.
+        stop_tracing()
+
+
 def app(host: str = "127.0.0.1") -> Starlette:
     """The Gateway as an ASGI app, serving MCP over streamable HTTP at /mcp."""
     server = Server[Downstream](
         "mcp-guard",
-        lifespan=lambda _: connect(),
+        lifespan=lifespan,
         on_list_tools=list_tools,
         on_call_tool=call_tool,
     )
@@ -54,6 +71,7 @@ def app(host: str = "127.0.0.1") -> Starlette:
 def main() -> None:
     host = os.environ.get("GATEWAY_HOST", "127.0.0.1")
     port = int(os.environ.get("GATEWAY_PORT", "8000"))
+    start_tracing("mcp-guard-gateway")
     uvicorn.run(app(host), host=host, port=port)
 
 

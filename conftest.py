@@ -38,6 +38,15 @@ def temporary_database() -> Generator[str]:
             admin.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
 
 
+@pytest.fixture(scope="session", autouse=True)
+def no_tracing() -> Iterator[None]:
+    """Tests send no spans anywhere, even from a shell where tracing is configured."""
+    with pytest.MonkeyPatch.context() as patch:
+        for name in [name for name in os.environ if name.startswith("OTEL_")]:
+            patch.delenv(name)
+        yield
+
+
 @pytest.fixture
 def database_url() -> Iterator[str]:
     """A fresh, empty database for one test."""
@@ -71,10 +80,24 @@ def anyio_backend() -> str:
 @pytest.fixture(scope="session")
 def gateway(seeded_database_url: str) -> Iterator[RunningGateway]:
     """The Gateway, started the way it runs for real, listening on a free local port."""
+    with start_gateway(seeded_database_url) as running:
+        yield running
+
+
+@contextmanager
+def start_gateway(
+    database_url: str, config: Mapping[str, str] | None = None
+) -> Generator[RunningGateway]:
+    """A Gateway process on a free local port, with extra environment `config`; stopped on exit."""
     port = _free_port()
     process = subprocess.Popen(
         ["mcp-guard-gateway"],
-        env={**os.environ, "DATABASE_URL": seeded_database_url, "GATEWAY_PORT": str(port)},
+        env={
+            **os.environ,
+            "DATABASE_URL": database_url,
+            "GATEWAY_PORT": str(port),
+            **(config or {}),
+        },
     )
     try:
         _wait_until_listening(process, port)

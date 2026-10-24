@@ -6,6 +6,10 @@ adds the results to the conversation and asks the model again, until the model r
 
 Conversations are stored by the LangGraph Postgres checkpointer, keyed by conversation ID,
 so a conversation carries on after the Agent restarts.
+
+Each turn is one trace: a span for the turn, a span for every model call (with its tokens,
+named by the OpenTelemetry GenAI conventions) and the MCP SDK's span for every Tool call,
+which carries the trace on into the Gateway.
 """
 
 # LangGraph is a namespace package that pyright doesn't see as typed, and some of its
@@ -31,8 +35,12 @@ from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from mcp import Client
 from mcp.types import TextContent
+from opentelemetry import trace
+from opentelemetry.trace import Span
 
 from mcp_guard.agent.model import Model
+
+_tracer = trace.get_tracer("mcp_guard.agent")
 
 
 class Conversation(TypedDict):
@@ -45,18 +53,37 @@ class Agent:
 
     async def ask(self, conversation_id: str, text: str) -> str:
         """Add the person's message to the conversation and return the Agent's reply."""
-        conversation = await self._graph.ainvoke(
-            Conversation(messages=[HumanMessage(text)]),
-            {"configurable": {"thread_id": conversation_id}},
-        )
+        # Langfuse groups a conversation's turns by session.id.
+        attributes = {"gen_ai.conversation.id": conversation_id, "session.id": conversation_id}
+        with _tracer.start_as_current_span("turn", attributes=attributes):
+            conversation = await self._graph.ainvoke(
+                Conversation(messages=[HumanMessage(text)]),
+                {"configurable": {"thread_id": conversation_id}},
+            )
         return conversation["messages"][-1].text
 
 
 @asynccontextmanager
 async def start_agent(
-    model: Model, gateway_url: str, database_url: str, *, customer_id: str
+    model: Model,
+    gateway_url: str,
+    database_url: str,
+    *,
+    customer_id: str,
+    model_name: str | None = None,
 ) -> AsyncGenerator[Agent]:
-    """Connect to the Gateway and the conversation store, serving one Customer."""
+    """Connect to the Gateway and the conversation store, serving one Customer.
+
+    `model_name` is the model's `provider:model` name, if it has one, for its traces.
+    """
+    provider, _, requested_model = (model_name or "").partition(":")
+    model_span = f"chat {requested_model}" if requested_model else "chat"
+    model_attributes = {"gen_ai.operation.name": "chat"}
+    if requested_model:
+        model_attributes |= {
+            "gen_ai.provider.name": provider,
+            "gen_ai.request.model": requested_model,
+        }
     async with (
         Client(gateway_url) as gateway,
         AsyncPostgresSaver.from_conn_string(database_url) as checkpointer,
@@ -71,7 +98,9 @@ async def start_agent(
         )
 
         async def call_model(state: Conversation) -> Conversation:
-            reply = await model.respond([system, *state["messages"]], tools)
+            with _tracer.start_as_current_span(model_span, attributes=model_attributes) as span:
+                reply = await model.respond([system, *state["messages"]], tools)
+                _record_model_call(span, reply)
             return Conversation(messages=[reply])
 
         async def call_tools(state: Conversation) -> Conversation:
@@ -92,6 +121,15 @@ async def start_agent(
             .compile(checkpointer=checkpointer)
         )
         yield Agent(graph)
+
+
+def _record_model_call(span: Span, reply: AIMessage) -> None:
+    """Put the model that answered and the tokens it used on its span, where the reply says them."""
+    if model_name := reply.response_metadata.get("model_name"):
+        span.set_attribute("gen_ai.response.model", model_name)
+    if usage := reply.usage_metadata:
+        span.set_attribute("gen_ai.usage.input_tokens", usage["input_tokens"])
+        span.set_attribute("gen_ai.usage.output_tokens", usage["output_tokens"])
 
 
 def _after_model(state: Conversation) -> str:
