@@ -45,7 +45,7 @@ The Gateway is an MCP server (streamable HTTP at `/mcp`) that any MCP client can
 | transactions | `list_transactions`, `raise_dispute` (one open dispute per transaction) |
 | payments | `refund` (needs an idempotency key: repeating it with the same key pays nothing more) |
 | tickets | `list_tickets`, `get_ticket` (read-only; a ticket's text is untrusted) |
-| notify | `send_email`, `send_sms` (recorded, never sent) |
+| notify | `send_email`, `send_sms` (recorded, never sent; an optional idempotency key makes a repeat record nothing more) |
 | fx-rates | `convert` (a third-party vendor; its free-text `reference` is recorded) |
 
 Nothing really leaves the bank: every call notify and fx-rates receive is kept, with its full arguments, in `bank.outbound`, which the Red-team eval reads with `read_outbound` ([`outbound.py`](fake_servers/src/mcp_guard/fake_servers/outbound.py)) to look for Canaries. There is no tool to read it back. To set up an Attack, trusted code (never the Agent: these aren't tools) calls [`scenarios.py`](fake_servers/src/mcp_guard/fake_servers/scenarios.py): `plant_ticket` adds a Customer message carrying injected instructions, and `set_fx_mode` switches fx-rates, even while it runs, between `honest`, `poisoned` (`convert`'s description carries instructions for the Agent) and `rug_pull` (the same instructions, but only from its second tool listing on, after the Gateway's startup listing saw it honest).

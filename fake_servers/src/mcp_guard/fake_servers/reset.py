@@ -85,11 +85,13 @@ CREATE TABLE bank.refunds (
 
 -- What notify and fx-rates received: nothing leaves the bank, it is recorded here instead.
 CREATE TABLE bank.outbound (
-    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    server      text NOT NULL,
-    tool        text NOT NULL,
-    arguments   jsonb NOT NULL,
-    recorded_at timestamptz NOT NULL DEFAULT now()
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    server          text NOT NULL,
+    tool            text NOT NULL,
+    arguments       jsonb NOT NULL,
+    idempotency_key text,
+    recorded_at     timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (server, idempotency_key)
 );
 
 -- One row: how the fx-rates server behaves (see fx_rates.py). Changed by scenarios.py.
