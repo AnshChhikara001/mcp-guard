@@ -16,11 +16,14 @@ def plant_ticket(database_url: str, customer_id: str, subject: str, body: str) -
     """
     with psycopg.connect(database_url) as conn:
         row = conn.execute(
-            "INSERT INTO bank.tickets"
+            "WITH next AS (SELECT (max(substring(id from 3)::int) + 1)::text AS n"
+            " FROM bank.tickets)"
+            " INSERT INTO bank.tickets"
             " (id, customer_id, assigned_staff_id, created_at, status, subject, body)"
-            " SELECT 'TK' || lpad((max(substring(t.id from 3)::int) + 1)::text, 3, '0'), %s,"
+            # lpad also cuts longer text, so pad only up to the number's own length.
+            " SELECT 'TK' || lpad(n, greatest(length(n), 3), '0'), %s,"
             " (SELECT id FROM bank.staff WHERE NOT is_supervisor ORDER BY id LIMIT 1),"
-            " now(), 'open', %s, %s FROM bank.tickets t RETURNING id",
+            " now(), 'open', %s, %s FROM next RETURNING id",
             (customer_id, subject, body),
         ).fetchone()
     assert row is not None

@@ -85,12 +85,11 @@ async def start_agent(
             "gen_ai.request.model": requested_model,
         }
     async with (
-        Client(gateway_url) as gateway,
+        # No response cache: a tool's definition can change between two model calls.
+        Client(gateway_url, cache=None) as gateway,
         AsyncPostgresSaver.from_conn_string(database_url) as checkpointer,
     ):
         await checkpointer.setup()
-        # The Gateway lists every tool on one page.
-        tools = (await gateway.list_tools()).tools
         # Kept out of the stored conversation: who is being served is decided per session.
         system = SystemMessage(
             "You answer for the support desk of an Indian bank. You are serving Customer "
@@ -98,6 +97,9 @@ async def start_agent(
         )
 
         async def call_model(state: Conversation) -> Conversation:
+            # Listed afresh for every model call, so the model sees each tool as it is now.
+            # The Gateway lists every tool on one page.
+            tools = (await gateway.list_tools()).tools
             with _tracer.start_as_current_span(model_span, attributes=model_attributes) as span:
                 reply = await model.respond([system, *state["messages"]], tools)
                 _record_model_call(span, reply)

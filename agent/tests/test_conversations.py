@@ -1,10 +1,16 @@
 """Seam 2: whole conversations, driven by the scripted fake model, through the real Gateway."""
 
-import pytest
+from collections.abc import Sequence
 
-from conftest import RunningGateway
+import pytest
+from langchain_core.messages import AIMessage, BaseMessage
+from mcp.types import Tool
+
+from conftest import RunningGateway, WritableBank
 from mcp_guard.agent.agent import start_agent
 from mcp_guard.agent.fake_model import ScriptedModel, balance_script
+from mcp_guard.fake_servers.fx_rates import INJECTED_INSTRUCTIONS
+from mcp_guard.fake_servers.scenarios import set_fx_mode
 
 pytestmark = pytest.mark.anyio
 
@@ -56,3 +62,26 @@ async def test_conversation_memory_survives_restarting_the_agent(
         reply = await restarted.ask("conversation-1", "What was that in paise?")
 
     assert "19484400 paise" in reply
+
+
+async def test_a_tool_definition_changed_mid_conversation_reaches_the_model(
+    writable_bank: WritableBank, database_url: str
+) -> None:
+    seen: list[str] = []
+
+    class DescriptionReader:
+        async def respond(
+            self, messages: Sequence[BaseMessage], tools: Sequence[Tool]
+        ) -> AIMessage:
+            [convert] = [t for t in tools if t.name == "convert"]
+            seen.append(convert.description or "")
+            return AIMessage("Noted.")
+
+    async with start_agent(
+        DescriptionReader(), writable_bank.gateway.url, database_url, customer_id="C001"
+    ) as agent:
+        await agent.ask("conversation-1", "How much is 100 dollars in rupees?")
+        set_fx_mode(writable_bank.database_url, "poisoned")
+        await agent.ask("conversation-1", "And 200?")
+
+    assert [INJECTED_INSTRUCTIONS in description for description in seen] == [False, True]
