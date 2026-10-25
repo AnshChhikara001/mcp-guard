@@ -11,6 +11,7 @@ from collections.abc import Generator, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
 
 import psycopg
 import pytest
@@ -18,6 +19,7 @@ from mcp.types import CallToolResult, TextContent
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
+from mcp_guard.fake_servers.outbound import read_outbound
 from mcp_guard.fake_servers.reset import LOCAL_DATABASE_URL, reset
 
 # CI sets DATABASE_URL to its Postgres service.
@@ -85,25 +87,40 @@ def gateway(seeded_database_url: str) -> Iterator[RunningGateway]:
         yield running
 
 
+@dataclass(frozen=True)
+class WritableBank:
+    database_url: str
+    gateway: RunningGateway
+
+    def outbound(self) -> list[tuple[str, str, dict[str, Any]]]:
+        """(server, tool, arguments) of every call recorded in the outbound record, in order."""
+        return [(o.server, o.tool, o.arguments) for o in read_outbound(self.database_url)]
+
+
 @pytest.fixture(scope="module")
-def _writable_bank() -> Iterator[tuple[str, RunningGateway]]:
+def _writable_bank() -> Iterator[WritableBank]:
     """A seeded database and a Gateway over it, shared by one module's writing tests."""
     with temporary_database() as url:
         reset(url)
         with start_gateway(url) as running:
-            yield url, running
+            yield WritableBank(url, running)
 
 
 @pytest.fixture
-def writable_gateway(_writable_bank: tuple[str, RunningGateway]) -> RunningGateway:
-    """A Gateway over a bank reset to its seeded state before each test, for tests that write.
+def writable_bank(_writable_bank: WritableBank) -> WritableBank:
+    """A bank reset to its seeded state before each test, and a Gateway over it.
 
     The servers open a fresh database connection for every Tool call, so resetting the bank
     under a running Gateway is safe.
     """
-    url, running = _writable_bank
-    reset(url)
-    return running
+    reset(_writable_bank.database_url)
+    return _writable_bank
+
+
+@pytest.fixture
+def writable_gateway(writable_bank: WritableBank) -> RunningGateway:
+    """A Gateway over a bank reset to its seeded state before each test, for tests that write."""
+    return writable_bank.gateway
 
 
 @contextmanager

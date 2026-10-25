@@ -1,7 +1,8 @@
 """The Gateway's MCP server: what an Agent connects to.
 
-It lists the downstream servers' tools as its own and forwards every Tool call, unchanged,
-to the server that owns the tool. There is no Decision yet: every call is allowed.
+It lists the downstream servers' tools as its own, asking them afresh on every listing, and
+forwards every Tool call, unchanged, to the server that owns the tool. There is no Decision
+yet: every call is allowed.
 
 Run it with `make gateway`, or `uv run mcp-guard-gateway` (GATEWAY_HOST and GATEWAY_PORT
 pick the address; the default is http://127.0.0.1:8000/mcp).
@@ -33,7 +34,7 @@ from mcp_guard.gateway.tracing import start_tracing, stop_tracing
 async def list_tools(
     ctx: ServerRequestContext[Downstream], params: PaginatedRequestParams | None
 ) -> ListToolsResult:
-    return ListToolsResult(tools=ctx.lifespan_context.tools)
+    return ListToolsResult(tools=await ctx.lifespan_context.list_tools())
 
 
 async def call_tool(

@@ -1,5 +1,6 @@
 """Seam 1: an MCP client talks to the Gateway, which passes Tool calls through unchanged."""
 
+import os
 import sys
 
 import pytest
@@ -24,15 +25,24 @@ async def test_client_sees_the_bank_servers_tools_as_the_gateways_own(
         "list_transactions",
         "raise_dispute",
         "refund",
+        "list_tickets",
+        "get_ticket",
+        "send_email",
+        "send_sms",
+        "convert",
     } <= {tool.name for tool in listing.tools}
 
 
-@pytest.mark.parametrize("server", ["accounts", "transactions", "payments"])
+@pytest.mark.parametrize(
+    "server", ["accounts", "transactions", "payments", "tickets", "notify", "fx_rates"]
+)
 async def test_tool_definitions_reach_the_client_unchanged(
-    gateway: RunningGateway, server: str
+    gateway: RunningGateway, seeded_database_url: str, server: str
 ) -> None:
     direct_server = StdioServerParameters(
-        command=sys.executable, args=["-m", f"mcp_guard.fake_servers.{server}"]
+        command=sys.executable,
+        args=["-m", f"mcp_guard.fake_servers.{server}"],
+        env={**os.environ, "DATABASE_URL": seeded_database_url},
     )
     async with Client(direct_server) as direct, Client(gateway.url) as through_gateway:
         expected = (await direct.list_tools()).tools

@@ -83,6 +83,21 @@ CREATE TABLE bank.refunds (
     refunded_at     timestamptz NOT NULL DEFAULT now()
 );
 
+-- What notify and fx-rates received: nothing leaves the bank, it is recorded here instead.
+CREATE TABLE bank.outbound (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    server      text NOT NULL,
+    tool        text NOT NULL,
+    arguments   jsonb NOT NULL,
+    recorded_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- One row: how the fx-rates server behaves (see fx_rates.py). Changed by scenarios.py.
+CREATE TABLE bank.fx_rates_mode (
+    mode text NOT NULL CHECK (mode IN ('honest', 'poisoned', 'rug_pull'))
+);
+INSERT INTO bank.fx_rates_mode VALUES ('honest');
+
 CREATE TABLE bank.tickets (
     id                text PRIMARY KEY,
     customer_id       text NOT NULL REFERENCES bank.customers,

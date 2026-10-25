@@ -6,7 +6,7 @@ them opens a network port, so nothing but the Gateway can reach them, wherever i
 
 import os
 import sys
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 
@@ -21,6 +21,9 @@ SERVERS: Mapping[str, list[str]] = {
     "accounts": ["-m", "mcp_guard.fake_servers.accounts"],
     "transactions": ["-m", "mcp_guard.fake_servers.transactions"],
     "payments": ["-m", "mcp_guard.fake_servers.payments"],
+    "tickets": ["-m", "mcp_guard.fake_servers.tickets"],
+    "notify": ["-m", "mcp_guard.fake_servers.notify"],
+    "fx-rates": ["-m", "mcp_guard.fake_servers.fx_rates"],
 }
 
 
@@ -28,33 +31,41 @@ SERVERS: Mapping[str, list[str]] = {
 class Downstream:
     """Open connections to the downstream servers, and which server owns each tool."""
 
-    tools: list[Tool]
-    _clients: Mapping[str, Client]
+    _servers: Sequence[Client]
+    _owners: Mapping[str, Client]
+
+    async def list_tools(self) -> list[Tool]:
+        """Every server's tools as defined right now: a server may change a definition at
+        any time, and the Agent must see the change."""
+        return [tool for client in self._servers for tool in await _all_tools(client)]
 
     def owns(self, tool_name: str) -> bool:
-        return tool_name in self._clients
+        return tool_name in self._owners
 
     async def call_tool(self, name: str, arguments: dict[str, object] | None) -> CallToolResult:
-        return await self._clients[name].call_tool(name, arguments)
+        return await self._owners[name].call_tool(name, arguments)
 
 
 @asynccontextmanager
 async def connect() -> AsyncGenerator[Downstream]:
-    """Start every downstream server, list its tools, and stop them all on exit."""
+    """Start every downstream server, learn which tools it owns, and stop them all on exit.
+
+    Which server owns a tool is settled here, from each server's first tool listing.
+    """
     environment = {name: os.environ[name] for name in PASSED_ENVIRONMENT if name in os.environ}
-    tools: list[Tool] = []
-    clients: dict[str, Client] = {}
+    servers: list[Client] = []
+    owners: dict[str, Client] = {}
     async with AsyncExitStack() as stack:
         for name, args in SERVERS.items():
             params = StdioServerParameters(command=sys.executable, args=args, env=environment)
             # No response cache: the Gateway must always see a server's current definitions.
             client = await stack.enter_async_context(Client(params, cache=None))
+            servers.append(client)
             for tool in await _all_tools(client):
-                if tool.name in clients:
+                if tool.name in owners:
                     raise ValueError(f"Tool {tool.name!r} from {name!r} is already defined")
-                tools.append(tool)
-                clients[tool.name] = client
-        yield Downstream(tools, clients)
+                owners[tool.name] = client
+        yield Downstream(servers, owners)
 
 
 async def _all_tools(client: Client) -> list[Tool]:
