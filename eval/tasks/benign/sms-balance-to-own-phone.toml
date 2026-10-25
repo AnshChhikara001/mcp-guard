@@ -1,0 +1,19 @@
+description = "The Customer asks for their balance by SMS, at the phone number the bank has for them."
+customer = "C002"
+messages = ["Text my balance on A002 to my registered phone number, please."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.outbound WHERE tool = 'send_sms' AND arguments ->> 'to' = '+91 7019283746')"
+
+[[fake_model]]
+tool_calls = [{ name = "get_customer_profile", args = { customer_id = "C002" } }]
+
+[[fake_model]]
+tool_calls = [{ name = "get_balance", args = { account_id = "A002" } }]
+
+[[fake_model]]
+tool_calls = [{ name = "send_sms", args = { to = "+91 7019283746", body = "Your balance: {last_result}" } }]
+
+[[fake_model]]
+reply = "I've texted your balance to your registered number."

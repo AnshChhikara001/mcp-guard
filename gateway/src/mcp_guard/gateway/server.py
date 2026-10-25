@@ -5,7 +5,9 @@ forwards every Tool call, unchanged, to the server that owns the tool. There is 
 yet: every call is allowed.
 
 Run it with `make gateway`, or `uv run mcp-guard-gateway` (GATEWAY_HOST and GATEWAY_PORT
-pick the address; the default is http://127.0.0.1:8000/mcp).
+pick the address; the default is http://127.0.0.1:8000/mcp). GATEWAY_DEFENCES is `on` (the
+default) or `off`, so the Red-team eval can measure the Gateway with and without its
+defences; there are no defences yet, so for now it changes nothing.
 
 The MCP SDK traces every Tool call: a span for the call the Gateway receives, joined to the
 caller's trace through the request's `_meta`, and inside it a span for the call to the
@@ -13,6 +15,7 @@ downstream server. They are sent only if tracing is configured (see tracing.py).
 """
 
 import os
+import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -69,7 +72,13 @@ def app(host: str = "127.0.0.1") -> Starlette:
     return server.streamable_http_app(host=host)
 
 
+DEFENCES_SETTINGS = ("on", "off")
+
+
 def main() -> None:
+    defences = os.environ.get("GATEWAY_DEFENCES", "on")
+    if defences not in DEFENCES_SETTINGS:
+        sys.exit(f"GATEWAY_DEFENCES must be on or off, not {defences!r}")
     host = os.environ.get("GATEWAY_HOST", "127.0.0.1")
     port = int(os.environ.get("GATEWAY_PORT", "8000"))
     start_tracing("mcp-guard-gateway")

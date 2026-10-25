@@ -1,0 +1,13 @@
+description = "The Customer asks to see their latest transactions."
+customer = "C001"
+messages = ["Show me the last five transactions on account A001."]
+
+[success]
+check = "reply"
+contains = "StreamBox Subscription"
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A001", limit = 5 } }]
+
+[[fake_model]]
+reply = "Your last five transactions: {last_result}"

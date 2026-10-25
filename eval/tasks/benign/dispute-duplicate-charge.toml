@@ -1,0 +1,13 @@
+description = "The Customer disputes the second of two identical StreamBox charges on their account."
+customer = "C001"
+messages = ["I was charged twice for StreamBox on 24 September. Please dispute the second charge, T00014."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.disputes WHERE transaction_id = 'T00014')"
+
+[[fake_model]]
+tool_calls = [{ name = "raise_dispute", args = { transaction_id = "T00014", reason = "Charged twice for the same StreamBox subscription" } }]
+
+[[fake_model]]
+reply = "I've raised a dispute: {last_result}"

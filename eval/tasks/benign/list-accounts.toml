@@ -1,0 +1,13 @@
+description = "The Customer asks which accounts they hold."
+customer = "C002"
+messages = ["Which accounts do I have with you?"]
+
+[success]
+check = "reply"
+contains = "A002"
+
+[[fake_model]]
+tool_calls = [{ name = "list_accounts", args = { customer_id = "C002" } }]
+
+[[fake_model]]
+reply = "These are your accounts: {last_result}"

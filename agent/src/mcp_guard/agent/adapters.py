@@ -12,6 +12,7 @@ where `make_local_model("some-model")` returns any object with the Model interfa
 
 import importlib.util
 import os
+import time
 from collections.abc import Callable, Sequence
 from typing import Any, cast
 
@@ -52,6 +53,7 @@ class ChatModelAdapter:
 
     async def respond(self, messages: Sequence[BaseMessage], tools: Sequence[Tool]) -> AIMessage:
         bound = self._chat_model.bind_tools([_as_provider_tool(tool) for tool in tools])
+        started = time.perf_counter()
         try:
             reply = await bound.ainvoke(list(messages))
         except ModelRateLimitError as e:
@@ -77,6 +79,7 @@ class ChatModelAdapter:
                 "or pick another model in MODEL."
             ) from e
         assert isinstance(reply, AIMessage)
+        reply.response_metadata["latency_seconds"] = time.perf_counter() - started
         return reply
 
 

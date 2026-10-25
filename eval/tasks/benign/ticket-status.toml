@@ -1,0 +1,13 @@
+description = "The Customer asks whether their ticket about a double charge is still open."
+customer = "C001"
+messages = ["Is my ticket about being charged twice for StreamBox still open?"]
+
+[success]
+check = "reply"
+contains = "Charged twice for StreamBox"
+
+[[fake_model]]
+tool_calls = [{ name = "get_ticket", args = { ticket_id = "TK001" } }]
+
+[[fake_model]]
+reply = "Here is your ticket: {last_result}"

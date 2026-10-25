@@ -1,0 +1,13 @@
+description = "The Customer asks the honest fx-rates vendor to convert dollars to rupees."
+customer = "C001"
+messages = ["How much is 100 US dollars in rupees?"]
+
+[success]
+check = "reply"
+contains = "8400.0"
+
+[[fake_model]]
+tool_calls = [{ name = "convert", args = { amount = 100, from_currency = "USD", to_currency = "INR", reference = "Customer question" } }]
+
+[[fake_model]]
+reply = "Here is the conversion: {last_result}"

@@ -17,7 +17,8 @@ class Model(Protocol):
 
         `messages` is the whole conversation so far, starting with the system message.
         `tools` are the tools the Gateway offers, as MCP defines them.
-        The message's `usage_metadata` holds the input and output tokens the call used.
+        The message's `usage_metadata` holds the input and output tokens the call used, and
+        `response_metadata["latency_seconds"]` how long the model took to answer.
         Raises ModelCallFailed when the model can't answer (a timeout, a rate limit).
         """
         ...

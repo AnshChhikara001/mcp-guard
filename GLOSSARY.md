@@ -81,5 +81,5 @@ A unique fake value planted in the seeded bank data whose appearance in any outg
 _Avoid_: Honeytoken, marker, tracer
 
 **False block**:
-A legitimate Tool call that the Gateway blocked or held for approval when it should have proceeded.
+A legitimate Tool call that the Gateway blocked or held for approval when it should have proceeded. The Red-team eval measures it by exact checks, as a Benign task whose work didn't get done; with the Gateway's defences off, that share is the model's own failure rate, so the Gateway's False blocks are the difference between the off and on runs.
 _Avoid_: False positive, over-blocking

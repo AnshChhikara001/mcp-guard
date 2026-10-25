@@ -2,8 +2,6 @@
 
 import json
 import os
-import socket
-import subprocess
 import threading
 import time
 import uuid
@@ -21,11 +19,10 @@ from psycopg.conninfo import make_conninfo
 
 from mcp_guard.fake_servers.outbound import read_outbound
 from mcp_guard.fake_servers.reset import LOCAL_DATABASE_URL, reset
+from mcp_guard.gateway.process import RunningGateway, start_gateway
 
 # CI sets DATABASE_URL to its Postgres service.
 DATABASE_URL = os.environ.get("DATABASE_URL", LOCAL_DATABASE_URL)
-
-GATEWAY_STARTUP_TIMEOUT_SECONDS = 30
 
 
 @contextmanager
@@ -63,16 +60,6 @@ def seeded_database_url() -> Iterator[str]:
     with temporary_database() as url:
         reset(url)
         yield url
-
-
-@dataclass(frozen=True)
-class RunningGateway:
-    process: subprocess.Popen[bytes]
-    port: int
-
-    @property
-    def url(self) -> str:
-        return f"http://127.0.0.1:{self.port}/mcp"
 
 
 @pytest.fixture(scope="session")
@@ -121,50 +108,6 @@ def writable_bank(_writable_bank: WritableBank) -> WritableBank:
 def writable_gateway(writable_bank: WritableBank) -> RunningGateway:
     """A Gateway over a bank reset to its seeded state before each test, for tests that write."""
     return writable_bank.gateway
-
-
-@contextmanager
-def start_gateway(
-    database_url: str, config: Mapping[str, str] | None = None
-) -> Generator[RunningGateway]:
-    """A Gateway process on a free local port, with extra environment `config`; stopped on exit."""
-    port = _free_port()
-    process = subprocess.Popen(
-        ["mcp-guard-gateway"],
-        env={
-            **os.environ,
-            "DATABASE_URL": database_url,
-            "GATEWAY_PORT": str(port),
-            **(config or {}),
-        },
-    )
-    try:
-        _wait_until_listening(process, port)
-        yield RunningGateway(process, port)
-    finally:
-        process.terminate()
-        process.wait(timeout=10)
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def _wait_until_listening(process: subprocess.Popen[bytes], port: int) -> None:
-    deadline = time.monotonic() + GATEWAY_STARTUP_TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise RuntimeError(f"Gateway exited during startup with code {process.returncode}")
-        try:
-            socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
-            return
-        except OSError:
-            time.sleep(0.1)
-    raise TimeoutError(
-        f"Gateway did not listen on port {port} within {GATEWAY_STARTUP_TIMEOUT_SECONDS}s"
-    )
 
 
 @dataclass

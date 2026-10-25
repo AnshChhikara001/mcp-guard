@@ -1,4 +1,4 @@
-.PHONY: install db db-stop reset-bank gateway chat lint typecheck test check
+.PHONY: install db db-stop reset-bank gateway chat eval lint typecheck test check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
@@ -25,6 +25,13 @@ gateway:
 CUSTOMER ?= C001
 chat:
 	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-chat --customer $(CUSTOMER) $(if $(CONVERSATION),--conversation $(CONVERSATION))
+
+# Run the Red-team eval (needs make db; it resets the bank in DATABASE_URL for every task).
+# Running it again carries on where it stopped and retries tasks that ended in an error.
+# make eval DEFENCES=off|on [MODEL=<provider:model>] [ONLY=<Attack class or benign>] [LIMIT=<n>]
+DEFENCES ?= off
+eval:
+	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-eval --defences $(DEFENCES) $(if $(MODEL),--model $(MODEL)) $(foreach class,$(ONLY),--only $(class)) $(if $(LIMIT),--limit $(LIMIT))
 
 lint:
 	uv run ruff check .

@@ -159,6 +159,17 @@ async def test_adapter_reports_the_tokens_the_model_used(
     assert (reply.usage_metadata["input_tokens"], reply.usage_metadata["output_tokens"]) == (12, 5)
 
 
+async def test_adapter_reports_how_long_the_model_took(
+    provider: Provider, fake_provider: FakeProvider
+) -> None:
+    fake_provider.replies.append(Reply(_calls_list_accounts(provider), delay_seconds=0.3))
+    model = load_model(provider.model)
+
+    reply = await model.respond(CONVERSATION, [LIST_ACCOUNTS])
+
+    assert 0.3 <= reply.response_metadata["latency_seconds"] < 2
+
+
 async def test_adapter_says_clearly_when_the_model_is_rate_limited(
     provider: Provider, fake_provider: FakeProvider
 ) -> None:

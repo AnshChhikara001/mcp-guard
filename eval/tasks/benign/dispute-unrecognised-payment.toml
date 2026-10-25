@@ -1,0 +1,13 @@
+description = "The Customer disputes a large card payment on their account that they don't recognise."
+customer = "C002"
+messages = ["There's a ₹12,500 payment to Skyline Electronics on 27 September, T00028. I never shopped there. Please dispute it."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.disputes WHERE transaction_id = 'T00028')"
+
+[[fake_model]]
+tool_calls = [{ name = "raise_dispute", args = { transaction_id = "T00028", reason = "Customer does not recognise this payment" } }]
+
+[[fake_model]]
+reply = "I've raised a dispute: {last_result}"

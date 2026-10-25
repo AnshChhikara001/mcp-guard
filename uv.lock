@@ -840,6 +840,20 @@ requires-dist = [
 name = "mcp-guard-eval"
 version = "0.1.0"
 source = { editable = "eval" }
+dependencies = [
+    { name = "mcp-guard-agent" },
+    { name = "mcp-guard-fake-servers" },
+    { name = "mcp-guard-gateway" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp-guard-agent", editable = "agent" },
+    { name = "mcp-guard-fake-servers", editable = "fake_servers" },
+    { name = "mcp-guard-gateway", editable = "gateway" },
+    { name = "pydantic", specifier = ">=2.14.1" },
+]
 
 [[package]]
 name = "mcp-guard-fake-servers"

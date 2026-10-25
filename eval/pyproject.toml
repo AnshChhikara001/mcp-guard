@@ -3,7 +3,15 @@ name = "mcp-guard-eval"
 version = "0.1.0"
 description = "The Red-team eval: Attacks and Benign tasks run with and without the Gateway."
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "mcp-guard-agent",
+    "mcp-guard-fake-servers",
+    "mcp-guard-gateway",
+    "pydantic>=2.14.1",
+]
+
+[project.scripts]
+mcp-guard-eval = "mcp_guard.redteam.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
@@ -11,3 +19,8 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "mcp_guard.redteam"
+
+[tool.uv.sources]
+mcp-guard-agent = { workspace = true }
+mcp-guard-fake-servers = { workspace = true }
+mcp-guard-gateway = { workspace = true }
