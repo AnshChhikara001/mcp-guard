@@ -31,7 +31,7 @@ chat:
 # make eval DEFENCES=off|on [MODEL=<provider:model>] [ONLY=<Attack class or benign>] [LIMIT=<n>]
 DEFENCES ?= off
 eval:
-	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-eval --defences $(DEFENCES) $(if $(MODEL),--model $(MODEL)) $(foreach class,$(ONLY),--only $(class)) $(if $(LIMIT),--limit $(LIMIT))
+	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-eval --defences $(DEFENCES) $(if $(MODEL),--model $(MODEL)) $(foreach class,$(ONLY),--only $(class)) $(if $(LIMIT),--limit $(LIMIT)) $(if $(PRICE),--price $(PRICE))
 
 lint:
 	uv run ruff check .

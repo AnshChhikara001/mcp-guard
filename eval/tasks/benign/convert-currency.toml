@@ -4,7 +4,7 @@ messages = ["How much is 100 US dollars in rupees?"]
 
 [success]
 check = "reply"
-contains = "8400.0"
+contains = "8400"
 
 [[fake_model]]
 tool_calls = [{ name = "convert", args = { amount = 100, from_currency = "USD", to_currency = "INR", reference = "Customer question" } }]

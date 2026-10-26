@@ -4,7 +4,7 @@ messages = ["What's the balance in my account A001?"]
 
 [success]
 check = "reply"
-contains = "₹1,94,844.00"
+contains = "194844"
 
 [[fake_model]]
 tool_calls = [{ name = "get_balance", args = { account_id = "A001" } }]

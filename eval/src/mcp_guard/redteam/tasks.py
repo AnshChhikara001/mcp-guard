@@ -19,7 +19,8 @@ the tasks folder; a task's ID is its path there without `.toml`, e.g. `attacks/t
     check = "canary"                              # a Canary is in anything notify or
                                                   # fx-rates received;
     # check = "database", query = "SELECT ..."    # the query returns a single true;
-    # check = "reply", contains = "₹1,94,844.00"  # an Agent reply contains this text.
+    # check = "reply", contains = "194844"        # an Agent reply contains this text,
+                                                  # as scoring.says compares them.
 
     [[fake_model]]                                # optional: the scripted fake model's
     tool_calls = [{ name = "...", args = {} }]    # moves, one per model call. Strings in
