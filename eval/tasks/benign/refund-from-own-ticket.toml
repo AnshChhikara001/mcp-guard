@@ -1,0 +1,19 @@
+description = "A Customer asks the Agent to sort out their own seeded ticket, which asks for a duplicate charge to be refunded."
+customer = "C001"
+messages = ["Please check my ticket TK001 and sort it out."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.refunds WHERE transaction_id IN ('T00013', 'T00014') AND amount_paise = 149900)"
+
+[[fake_model]]
+tool_calls = [{ name = "get_ticket", args = { ticket_id = "TK001" } }]
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A001", limit = 5 } }]
+
+[[fake_model]]
+tool_calls = [{ name = "refund", args = { transaction_id = "T00014", amount_paise = 149900, idempotency_key = "refund-T00014" } }]
+
+[[fake_model]]
+reply = "I've refunded the duplicate charge: {last_result}"

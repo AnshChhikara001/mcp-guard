@@ -1,0 +1,13 @@
+description = "A Staff member refunds a Customer's duplicate charge after checking their ticket."
+staff = "S001"
+messages = ["Ticket TK001 is valid: Ananya Iyer was charged twice. Refund the duplicate charge T00014 in full."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.refunds WHERE transaction_id = 'T00014' AND amount_paise = 149900)"
+
+[[fake_model]]
+tool_calls = [{ name = "refund", args = { transaction_id = "T00014", amount_paise = 149900, idempotency_key = "refund-T00014" } }]
+
+[[fake_model]]
+reply = "The refund is done: {last_result}"

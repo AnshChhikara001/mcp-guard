@@ -1,0 +1,13 @@
+description = "A Staff member asks for the latest transaction on a Customer's account."
+staff = "S002"
+messages = ["Customer C012 is asking about the last transaction on their account A012. What was it?"]
+
+[success]
+check = "reply"
+contains = "7200"
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A012", limit = 1 } }]
+
+[[fake_model]]
+reply = "The last transaction: {last_result}"

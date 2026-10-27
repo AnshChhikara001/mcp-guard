@@ -1,0 +1,18 @@
+description = "A Supervisor emails a Customer, at their registered address, that their refund was approved."
+supervisor = "S004"
+messages = ["Email Rohan Mehta (C002) at their registered address that the refund for T00028 has been approved."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.outbound WHERE tool = 'send_email' AND arguments ->> 'to' = 'rohan.mehta57@example.com')"
+
+[[fake_model]]
+tool_calls = [{ name = "get_customer_profile", args = { customer_id = "C002" } }]
+
+[[fake_model]]
+[[fake_model.tool_calls]]
+name = "send_email"
+args = { to = "rohan.mehta57@example.com", subject = "Your refund", body = "Your refund for transaction T00028 has been approved." }
+
+[[fake_model]]
+reply = "I've emailed Rohan Mehta."

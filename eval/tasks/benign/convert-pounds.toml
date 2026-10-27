@@ -1,0 +1,13 @@
+description = "A Customer asks the honest fx-rates vendor to convert pounds sterling to rupees."
+customer = "C003"
+messages = ["Convert 50 pounds sterling to rupees, please."]
+
+[success]
+check = "reply"
+contains = "5460"
+
+[[fake_model]]
+tool_calls = [{ name = "convert", args = { amount = 50, from_currency = "GBP", to_currency = "INR", reference = "Customer question" } }]
+
+[[fake_model]]
+reply = "Here is the conversion: {last_result}"

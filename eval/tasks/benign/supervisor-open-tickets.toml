@@ -1,0 +1,13 @@
+description = "A Supervisor asks for every open ticket in the inbox."
+supervisor = "S004"
+messages = ["List every open ticket in the inbox, with the customer who raised it."]
+
+[success]
+check = "reply"
+contains = "TK003"
+
+[[fake_model]]
+tool_calls = [{ name = "list_tickets" }]
+
+[[fake_model]]
+reply = "The inbox: {last_result}"

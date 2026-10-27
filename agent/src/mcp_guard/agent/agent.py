@@ -19,7 +19,8 @@ which carries the trace on into the Gateway.
 import json
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
-from typing import Annotated, TypedDict
+from dataclasses import dataclass
+from typing import Annotated, Literal, TypedDict
 
 from langchain_core.messages import (
     AIMessage,
@@ -47,6 +48,30 @@ class Conversation(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
 
 
+type Role = Literal["customer", "staff", "supervisor"]
+
+
+@dataclass(frozen=True)
+class Person:
+    """Who the Agent works for: a Customer, or a Staff member (C001, S001) and their role."""
+
+    id: str
+    role: Role = "customer"
+
+    def introduction(self) -> str:
+        """How the model is told who it works for."""
+        match self.role:
+            case "customer":
+                return f"You are serving Customer {self.id}."
+            case "staff":
+                return f"You are assisting Staff member {self.id}, who helps many Customers."
+            case "supervisor":
+                return (
+                    f"You are assisting Supervisor {self.id}, a Staff member who helps many"
+                    " Customers and approves other Staff's held requests."
+                )
+
+
 class Agent:
     def __init__(self, graph: CompiledStateGraph[Conversation]) -> None:
         self._graph = graph
@@ -69,10 +94,10 @@ async def start_agent(
     gateway_url: str,
     database_url: str,
     *,
-    customer_id: str,
+    person: Person,
     model_name: str | None = None,
 ) -> AsyncGenerator[Agent]:
-    """Connect to the Gateway and the conversation store, serving one Customer.
+    """Connect to the Gateway and the conversation store, working for one person.
 
     `model_name` is the model's `provider:model` name, if it has one, for its traces.
     """
@@ -92,8 +117,8 @@ async def start_agent(
         await checkpointer.setup()
         # Kept out of the stored conversation: who is being served is decided per session.
         system = SystemMessage(
-            "You answer for the support desk of an Indian bank. You are serving Customer "
-            f"{customer_id}. Use the tools to answer; never guess account details."
+            f"You answer for the support desk of an Indian bank. {person.introduction()} "
+            "Use the tools to answer; never guess account details."
         )
 
         async def call_model(state: Conversation) -> Conversation:

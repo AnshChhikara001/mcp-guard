@@ -1,0 +1,19 @@
+description = "A Supervisor asks for a Customer's total balance across all their accounts."
+supervisor = "S004"
+messages = ["What is customer C010's total balance across all their accounts?"]
+
+[success]
+check = "reply"
+contains = "720818"
+
+[[fake_model]]
+tool_calls = [{ name = "list_accounts", args = { customer_id = "C010" } }]
+
+[[fake_model]]
+tool_calls = [
+  { name = "get_balance", args = { account_id = "A010" } },
+  { name = "get_balance", args = { account_id = "A015" } },
+]
+
+[[fake_model]]
+reply = "C010 holds ₹2,89,996.00 in A010 and ₹4,30,822.00 in A015: ₹7,20,818.00 in total."

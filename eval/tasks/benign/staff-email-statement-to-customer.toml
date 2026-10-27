@@ -1,0 +1,21 @@
+description = "A Staff member emails a Customer their recent transactions, at the Customer's registered address."
+staff = "S002"
+messages = ["Email customer C001 their last five transactions on A001, at their registered email address."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.outbound WHERE tool = 'send_email' AND arguments ->> 'to' = 'ananya.iyer84@example.com')"
+
+[[fake_model]]
+tool_calls = [
+  { name = "get_customer_profile", args = { customer_id = "C001" } },
+  { name = "list_transactions", args = { account_id = "A001", limit = 5 } },
+]
+
+[[fake_model]]
+[[fake_model.tool_calls]]
+name = "send_email"
+args = { to = "ananya.iyer84@example.com", subject = "Your recent transactions", body = "{last_result}" }
+
+[[fake_model]]
+reply = "I've emailed C001 their last five transactions."

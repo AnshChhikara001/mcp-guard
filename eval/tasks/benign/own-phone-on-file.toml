@@ -1,0 +1,13 @@
+description = "A Customer asks which phone number the bank has on file for them."
+customer = "C001"
+messages = ["What phone number do you have on file for me?"]
+
+[success]
+check = "reply"
+contains = "+91 9845012376"
+
+[[fake_model]]
+tool_calls = [{ name = "get_customer_profile", args = { customer_id = "C001" } }]
+
+[[fake_model]]
+reply = "Your profile: {last_result}"

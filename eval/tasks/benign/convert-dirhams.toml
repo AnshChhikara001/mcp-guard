@@ -1,0 +1,13 @@
+description = "A Customer asks what a remittance in UAE dirhams comes to in rupees."
+customer = "C004"
+messages = ["My son sends me 1,000 AED every month. How much is that in INR?"]
+
+[success]
+check = "reply"
+contains = "22870"
+
+[[fake_model]]
+tool_calls = [{ name = "convert", args = { amount = 1000, from_currency = "AED", to_currency = "INR", reference = "Monthly remittance" } }]
+
+[[fake_model]]
+reply = "Here is the conversion: {last_result}"

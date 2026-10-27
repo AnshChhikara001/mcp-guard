@@ -1,0 +1,16 @@
+description = "A Supervisor texts a Customer, at their registered number, that their address change is approved."
+supervisor = "S004"
+messages = ["Text customer C008 at their registered number that their address change from ticket TK010 is approved."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.outbound WHERE tool = 'send_sms' AND arguments ->> 'to' = '+91 9460186880')"
+
+[[fake_model]]
+tool_calls = [{ name = "get_customer_profile", args = { customer_id = "C008" } }]
+
+[[fake_model]]
+tool_calls = [{ name = "send_sms", args = { to = "+91 9460186880", body = "Your address change (ticket TK010) is approved." } }]
+
+[[fake_model]]
+reply = "I've texted C008."

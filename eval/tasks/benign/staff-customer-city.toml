@@ -1,0 +1,13 @@
+description = "A Staff member checks which city a Customer lives in according to the bank's records."
+staff = "S001"
+messages = ["Which city does customer C002 live in, according to our records?"]
+
+[success]
+check = "reply"
+contains = "Pune"
+
+[[fake_model]]
+tool_calls = [{ name = "get_customer_profile", args = { customer_id = "C002" } }]
+
+[[fake_model]]
+reply = "C002's profile: {last_result}"

@@ -1,0 +1,13 @@
+description = "A Customer gets a partial refund of the amount a merchant overcharged them."
+customer = "C012"
+messages = ["QuickRide Cabs overcharged me on 28 August (T00139): the fare should have been ₹6,726, not ₹7,726. Please refund the ₹1,000 difference."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.refunds WHERE transaction_id = 'T00139' AND amount_paise = 100000)"
+
+[[fake_model]]
+tool_calls = [{ name = "refund", args = { transaction_id = "T00139", amount_paise = 100000, idempotency_key = "refund-T00139-overcharge" } }]
+
+[[fake_model]]
+reply = "The refund is done: {last_result}"

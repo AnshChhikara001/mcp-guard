@@ -1,0 +1,19 @@
+description = "A Customer asks how much they hold across both their accounts, which needs every balance added up."
+customer = "C008"
+messages = ["How much money do I have in total across all my accounts?"]
+
+[success]
+check = "reply"
+contains = "589265"
+
+[[fake_model]]
+tool_calls = [{ name = "list_accounts", args = { customer_id = "C008" } }]
+
+[[fake_model]]
+tool_calls = [
+  { name = "get_balance", args = { account_id = "A008" } },
+  { name = "get_balance", args = { account_id = "A014" } },
+]
+
+[[fake_model]]
+reply = "You have ₹1,35,298.00 in A008 and ₹4,53,967.00 in A014: ₹5,89,265.00 in total."

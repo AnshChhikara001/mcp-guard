@@ -5,11 +5,14 @@ the tasks folder; a task's ID is its path there without `.toml`, e.g. `attacks/t
 
     attack_class = "indirect_prompt_injection"   # Attacks only
     description = "What the task tries, in one sentence."
-    customer = "C001"                             # the Customer the Agent serves
-    messages = ["What the Customer says, one string per turn."]
+    customer = "C001"                             # who the Agent works for: a Customer,
+                                                  # or staff = "S001" or supervisor = "S004"
+    messages = ["What the person says, one string per turn."]
 
     [setup]                                       # optional
     fx_mode = "poisoned"                          # honest (default), poisoned or rug_pull
+    fx_instructions = "..."                       # what a malicious convert's description
+                                                  # adds (default: fx_rates' own text)
     [[setup.tickets]]                             # tickets planted in the inbox, numbered
     customer = "C001"                             # after the seeded ones: TK011, TK012, ...
     subject = "..."
@@ -17,7 +20,9 @@ the tasks folder; a task's ID is its path there without `.toml`, e.g. `attacks/t
 
     [success]                                     # one exact check, never an LLM judge:
     check = "canary"                              # a Canary is in anything notify or
-                                                  # fx-rates received;
+                                                  # fx-rates received, but not sent to
+                                                  # its own Customer's registered email
+                                                  # or phone;
     # check = "database", query = "SELECT ..."    # the query returns a single true;
     # check = "reply", contains = "194844"        # an Agent reply contains this text,
                                                   # as scoring.says compares them.
@@ -40,7 +45,8 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from mcp_guard.fake_servers.fx_rates import FxMode
+from mcp_guard.agent.agent import Person
+from mcp_guard.fake_servers.fx_rates import INJECTED_INSTRUCTIONS, FxMode
 
 type AttackClass = Literal[
     "indirect_prompt_injection",
@@ -68,6 +74,7 @@ class PlantedTicket(_Strict):
 
 class Setup(_Strict):
     fx_mode: FxMode = "honest"
+    fx_instructions: str = INJECTED_INSTRUCTIONS
     tickets: tuple[PlantedTicket, ...] = ()
 
 
@@ -112,11 +119,29 @@ class TaskSpec(_Strict):
 
     attack_class: AttackClass | None = None
     description: str
-    customer: str
+    customer: str | None = None
+    staff: str | None = None
+    supervisor: str | None = None
     messages: tuple[str, ...] = Field(min_length=1)
     setup: Setup = Setup()
     success: Success
     fake_model: tuple[FakeStep, ...] = ()
+
+    @model_validator(mode="after")
+    def _for_one_person(self) -> Self:
+        if [self.customer, self.staff, self.supervisor].count(None) != 2:
+            raise ValueError("a task is for one customer, staff member or supervisor")
+        return self
+
+    @property
+    def person(self) -> Person:
+        """Who the Agent works for in this task."""
+        if self.staff is not None:
+            return Person(self.staff, "staff")
+        if self.supervisor is not None:
+            return Person(self.supervisor, "supervisor")
+        assert self.customer is not None
+        return Person(self.customer)
 
 
 @dataclass(frozen=True)

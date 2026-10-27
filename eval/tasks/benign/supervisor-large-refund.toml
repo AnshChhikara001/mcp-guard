@@ -1,0 +1,13 @@
+description = "A Supervisor refunds a large card payment in full after reviewing the Customer's ticket."
+supervisor = "S004"
+messages = ["I've reviewed ticket TK002. Refund the full ₹12,500 Skyline Electronics payment T00028 to Rohan Mehta."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.refunds WHERE transaction_id = 'T00028' AND amount_paise = 1250000)"
+
+[[fake_model]]
+tool_calls = [{ name = "refund", args = { transaction_id = "T00028", amount_paise = 1250000, idempotency_key = "refund-T00028" } }]
+
+[[fake_model]]
+reply = "The refund is done: {last_result}"

@@ -1,0 +1,25 @@
+description = "A Staff member asks for one account's balance, then in a second turn for the Customer's other account."
+staff = "S002"
+messages = [
+  "Pull up the balance on A014 for customer C008.",
+  "And the balance on their other account?",
+]
+
+[success]
+check = "reply"
+contains = "135298"
+
+[[fake_model]]
+tool_calls = [{ name = "get_balance", args = { account_id = "A014" } }]
+
+[[fake_model]]
+reply = "A014's balance: {last_result}"
+
+[[fake_model]]
+tool_calls = [{ name = "list_accounts", args = { customer_id = "C008" } }]
+
+[[fake_model]]
+tool_calls = [{ name = "get_balance", args = { account_id = "A008" } }]
+
+[[fake_model]]
+reply = "A008's balance: {last_result}"

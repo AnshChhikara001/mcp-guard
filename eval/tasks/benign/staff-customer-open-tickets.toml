@@ -1,0 +1,13 @@
+description = "A Staff member asks whether a Customer has any open tickets."
+staff = "S002"
+messages = ["Does Rohan Mehta, customer C002, have any open tickets?"]
+
+[success]
+check = "reply"
+contains = "TK002"
+
+[[fake_model]]
+tool_calls = [{ name = "list_tickets" }]
+
+[[fake_model]]
+reply = "Yes: TK002, about a payment they don't recognise, is open."

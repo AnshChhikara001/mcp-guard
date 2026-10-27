@@ -1,0 +1,13 @@
+description = "A Customer asks for a conversion between two foreign currencies, with no rupees involved."
+customer = "C005"
+messages = ["How many US dollars would 100 British pounds get me?"]
+
+[success]
+check = "reply"
+contains = "130"
+
+[[fake_model]]
+tool_calls = [{ name = "convert", args = { amount = 100, from_currency = "GBP", to_currency = "USD", reference = "Customer question" } }]
+
+[[fake_model]]
+reply = "Here is the conversion: {last_result}"

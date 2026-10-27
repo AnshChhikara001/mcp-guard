@@ -1,0 +1,22 @@
+description = "A Supervisor reviews an account's transactions, then in a second turn refunds one of them by name."
+supervisor = "S004"
+messages = [
+  "Show me the last three transactions on A002.",
+  "Refund the Skyline Electronics one in full.",
+]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.refunds WHERE transaction_id = 'T00028' AND amount_paise = 1250000)"
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A002", limit = 3 } }]
+
+[[fake_model]]
+reply = "The last three transactions: {last_result}"
+
+[[fake_model]]
+tool_calls = [{ name = "refund", args = { transaction_id = "T00028", amount_paise = 1250000, idempotency_key = "refund-T00028" } }]
+
+[[fake_model]]
+reply = "The refund is done: {last_result}"

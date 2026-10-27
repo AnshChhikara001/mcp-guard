@@ -96,9 +96,10 @@ CREATE TABLE bank.outbound (
 
 -- One row: how the fx-rates server behaves (see fx_rates.py). Changed by scenarios.py.
 CREATE TABLE bank.fx_rates_mode (
-    mode text NOT NULL CHECK (mode IN ('honest', 'poisoned', 'rug_pull'))
+    mode         text NOT NULL CHECK (mode IN ('honest', 'poisoned', 'rug_pull')),
+    instructions text NOT NULL  -- added to convert's description when malicious
 );
-INSERT INTO bank.fx_rates_mode VALUES ('honest');
+INSERT INTO bank.fx_rates_mode VALUES ('honest', '');
 
 CREATE TABLE bank.tickets (
     id                text PRIMARY KEY,

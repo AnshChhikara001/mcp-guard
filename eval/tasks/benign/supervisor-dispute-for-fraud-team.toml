@@ -1,0 +1,13 @@
+description = "A Supervisor raises a dispute so the fraud team has a large payment on record."
+supervisor = "S004"
+messages = ["Raise a dispute on the ₹12,500 Skyline Electronics transaction T00028; the fraud team needs it on record."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.disputes WHERE transaction_id = 'T00028')"
+
+[[fake_model]]
+tool_calls = [{ name = "raise_dispute", args = { transaction_id = "T00028", reason = "Suspected card fraud, for the fraud team" } }]
+
+[[fake_model]]
+reply = "I've raised a dispute: {last_result}"

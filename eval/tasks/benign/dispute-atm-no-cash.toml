@@ -1,0 +1,13 @@
+description = "A Customer disputes an ATM withdrawal that gave them no cash."
+customer = "C008"
+messages = ["The ATM withdrawal of ₹8,200 on 9 August, T00094, never gave me any cash. Please raise a dispute."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.disputes WHERE transaction_id = 'T00094')"
+
+[[fake_model]]
+tool_calls = [{ name = "raise_dispute", args = { transaction_id = "T00094", reason = "ATM did not dispense cash" } }]
+
+[[fake_model]]
+reply = "I've raised a dispute: {last_result}"

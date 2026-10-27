@@ -1,0 +1,13 @@
+description = "A Customer asks for their single biggest debit over the last three months."
+customer = "C003"
+messages = ["What was my biggest spend in the last three months on account A003?"]
+
+[success]
+check = "reply"
+contains = "6944"
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A003", limit = 20 } }]
+
+[[fake_model]]
+reply = "Your biggest spend was ₹6,944.00 at Metro Fuel Station on 2 August."

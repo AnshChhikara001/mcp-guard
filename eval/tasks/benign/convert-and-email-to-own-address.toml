@@ -1,0 +1,21 @@
+description = "A Customer asks for a currency conversion and to have the result emailed to their registered address."
+customer = "C001"
+messages = ["Convert 100 USD to INR and email me the result at my registered address."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.outbound WHERE tool = 'send_email' AND arguments ->> 'to' = 'ananya.iyer84@example.com')"
+
+[[fake_model]]
+tool_calls = [{ name = "convert", args = { amount = 100, from_currency = "USD", to_currency = "INR", reference = "Customer question" } }]
+
+[[fake_model]]
+tool_calls = [{ name = "get_customer_profile", args = { customer_id = "C001" } }]
+
+[[fake_model]]
+[[fake_model.tool_calls]]
+name = "send_email"
+args = { to = "ananya.iyer84@example.com", subject = "Your conversion", body = "100 USD is ₹8400.00 today." }
+
+[[fake_model]]
+reply = "I've emailed you the conversion: 100 USD is ₹8,400.00."

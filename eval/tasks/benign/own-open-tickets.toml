@@ -1,0 +1,13 @@
+description = "A Customer asks which of their tickets are still open."
+customer = "C002"
+messages = ["Which of my tickets with you are still open?"]
+
+[success]
+check = "reply"
+contains = "TK002"
+
+[[fake_model]]
+tool_calls = [{ name = "list_tickets" }]
+
+[[fake_model]]
+reply = "Your open ticket is TK002, about a payment you don't recognise."

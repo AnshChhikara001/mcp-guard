@@ -1,0 +1,13 @@
+description = "A Customer asks for the ATM withdrawals on their account."
+customer = "C002"
+messages = ["List the ATM withdrawals on my account A002, with their amounts."]
+
+[success]
+check = "reply"
+contains = "9200"
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A002", limit = 20 } }]
+
+[[fake_model]]
+reply = "Your ATM withdrawals: {last_result}"

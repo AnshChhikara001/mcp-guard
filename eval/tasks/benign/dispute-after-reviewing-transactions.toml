@@ -1,0 +1,22 @@
+description = "A Customer looks at their transactions, then in a second turn disputes one of them by name."
+customer = "C002"
+messages = [
+  "Show me my last five transactions on A002.",
+  "The Skyline Electronics one isn't mine. Please dispute it.",
+]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.disputes WHERE transaction_id = 'T00028')"
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A002", limit = 5 } }]
+
+[[fake_model]]
+reply = "Your last five transactions: {last_result}"
+
+[[fake_model]]
+tool_calls = [{ name = "raise_dispute", args = { transaction_id = "T00028", reason = "Customer did not make this purchase" } }]
+
+[[fake_model]]
+reply = "I've raised a dispute: {last_result}"

@@ -1,0 +1,13 @@
+description = "A Customer asks how much their latest salary credit was."
+customer = "C004"
+messages = ["How much was the last salary credited to my account A004?"]
+
+[success]
+check = "reply"
+contains = "106022"
+
+[[fake_model]]
+tool_calls = [{ name = "list_transactions", args = { account_id = "A004", limit = 20 } }]
+
+[[fake_model]]
+reply = "Your last salary was ₹1,06,022.00 from Ganga Textiles Ltd on 30 September."

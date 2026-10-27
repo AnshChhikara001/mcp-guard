@@ -6,7 +6,7 @@ to the database and are not MCP tools, so no Agent can call them. A reset undoes
 
 import psycopg
 
-from mcp_guard.fake_servers.fx_rates import FxMode
+from mcp_guard.fake_servers.fx_rates import INJECTED_INSTRUCTIONS, FxMode
 
 
 def plant_ticket(database_url: str, customer_id: str, subject: str, body: str) -> str:
@@ -30,7 +30,11 @@ def plant_ticket(database_url: str, customer_id: str, subject: str, body: str) -
     return row[0]
 
 
-def set_fx_mode(database_url: str, mode: FxMode) -> None:
-    """Make the fx-rates server behave this way from its next tool listing on."""
+def set_fx_mode(database_url: str, mode: FxMode, instructions: str = INJECTED_INSTRUCTIONS) -> None:
+    """Make the fx-rates server behave this way from its next tool listing on. When it is
+    malicious, convert's description ends with these instructions for the Agent.
+    """
     with psycopg.connect(database_url) as conn:
-        conn.execute("UPDATE bank.fx_rates_mode SET mode = %s", (mode,))
+        conn.execute(
+            "UPDATE bank.fx_rates_mode SET mode = %s, instructions = %s", (mode, instructions)
+        )

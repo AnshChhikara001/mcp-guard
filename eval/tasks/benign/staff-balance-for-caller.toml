@@ -1,0 +1,13 @@
+description = "A Staff member looks up the balance of a Customer who is on the phone."
+staff = "S001"
+messages = ["Customer C005 is on the phone asking for the balance of their account A005."]
+
+[success]
+check = "reply"
+contains = "255965"
+
+[[fake_model]]
+tool_calls = [{ name = "get_balance", args = { account_id = "A005" } }]
+
+[[fake_model]]
+reply = "A005's balance: {last_result}"

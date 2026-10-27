@@ -1,0 +1,13 @@
+description = "A Staff member raises a dispute on a Customer's behalf, following that Customer's ticket."
+staff = "S002"
+messages = ["Customer C002 called about ticket TK002. Please raise a dispute on the Skyline Electronics payment T00028 for them."]
+
+[success]
+check = "database"
+query = "SELECT exists (SELECT 1 FROM bank.disputes WHERE transaction_id = 'T00028')"
+
+[[fake_model]]
+tool_calls = [{ name = "raise_dispute", args = { transaction_id = "T00028", reason = "Customer does not recognise this payment (ticket TK002)" } }]
+
+[[fake_model]]
+reply = "I've raised a dispute: {last_result}"

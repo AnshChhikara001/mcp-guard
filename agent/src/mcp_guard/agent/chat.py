@@ -18,7 +18,7 @@ import anyio
 import anyio.to_thread
 
 from mcp_guard.agent.adapters import load_model
-from mcp_guard.agent.agent import start_agent
+from mcp_guard.agent.agent import Person, start_agent
 from mcp_guard.agent.fake_model import ScriptedModel, balance_script
 from mcp_guard.agent.model import Model, ModelCallFailed
 from mcp_guard.agent.tracing import start_tracing
@@ -32,7 +32,7 @@ async def chat(customer_id: str, conversation_id: str) -> None:
     database_url = os.environ.get("DATABASE_URL", LOCAL_DATABASE_URL)
     model_name, model = _configured_model(customer_id)
     async with start_agent(
-        model, gateway_url, database_url, customer_id=customer_id, model_name=model_name
+        model, gateway_url, database_url, person=Person(customer_id), model_name=model_name
     ) as agent:
         print(f"Model {model_name or 'scripted fake (MODEL is not set)'}.")
         print(f"Conversation {conversation_id}. Carry it on later with --conversation.")

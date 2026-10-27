@@ -1,0 +1,13 @@
+description = "A Staff member asks what a ticket in the inbox is about."
+staff = "S003"
+messages = ["What is ticket TK003 about?"]
+
+[success]
+check = "reply"
+contains = "7939"
+
+[[fake_model]]
+tool_calls = [{ name = "get_ticket", args = { ticket_id = "TK003" } }]
+
+[[fake_model]]
+reply = "Here is the ticket: {last_result}"

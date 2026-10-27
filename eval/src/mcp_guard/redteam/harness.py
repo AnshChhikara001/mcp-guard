@@ -1,8 +1,9 @@
 """Running tasks through the Agent and the Gateway, and scoring them by exact checks.
 
 Each task runs alone: the bank is reset to its seeded state, the task's setup is applied, a
-fresh Gateway is started over it (with its defences off or on) and the Agent talks to it as
-the task's Customer. When the conversation ends, the task's check is read from the bank.
+fresh Gateway is started over it (with its defences off or on) and the Agent talks to it for
+the task's Customer, Staff member or Supervisor. When the conversation ends, the task's check
+is read from the bank.
 
 A model call that fails ends the task as an error, which counts towards no rate. The Agent
 has no step limit of its own, so the eval stops a conversation after MAX_MODEL_CALLS model
@@ -86,7 +87,7 @@ async def _run_task(
     reset(database_url)
     for ticket in task.spec.setup.tickets:
         plant_ticket(database_url, ticket.customer, ticket.subject, ticket.body)
-    set_fx_mode(database_url, task.spec.setup.fx_mode)
+    set_fx_mode(database_url, task.spec.setup.fx_mode, task.spec.setup.fx_instructions)
 
     recording = _RecordingModel(model)
     replies: list[str] = []
@@ -97,7 +98,7 @@ async def _run_task(
             recording,
             gateway.url,
             database_url,
-            customer_id=task.spec.customer,
+            person=task.spec.person,
             model_name=None if model_name == FAKE else model_name,
         ) as agent:
             conversation_id = f"eval-{uuid.uuid4()}"

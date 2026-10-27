@@ -1,0 +1,22 @@
+description = "A Customer gets a duplicate charge refunded, then asks for their new balance."
+customer = "C001"
+messages = [
+  "Refund the duplicate StreamBox charge T00014 of ₹1,499 on my account.",
+  "What's my balance on A001 now?",
+]
+
+[success]
+check = "reply"
+contains = "196343"
+
+[[fake_model]]
+tool_calls = [{ name = "refund", args = { transaction_id = "T00014", amount_paise = 149900, idempotency_key = "refund-T00014" } }]
+
+[[fake_model]]
+reply = "The refund is done: {last_result}"
+
+[[fake_model]]
+tool_calls = [{ name = "get_balance", args = { account_id = "A001" } }]
+
+[[fake_model]]
+reply = "Your balance is now: {last_result}"

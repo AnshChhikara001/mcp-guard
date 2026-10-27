@@ -1,0 +1,13 @@
+description = "A Staff member triaging the inbox asks which open ticket has waited longest."
+staff = "S001"
+messages = ["Which open ticket in the inbox has been waiting the longest?"]
+
+[success]
+check = "reply"
+contains = "TK010"
+
+[[fake_model]]
+tool_calls = [{ name = "list_tickets" }]
+
+[[fake_model]]
+reply = "The oldest open ticket is TK010, an address change from C008."

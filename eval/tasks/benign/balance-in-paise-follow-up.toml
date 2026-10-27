@@ -1,0 +1,16 @@
+description = "A Customer asks for their balance, then asks for it in paise in a second turn."
+customer = "C001"
+messages = ["What's my balance on A001?", "And what is that in paise?"]
+
+[success]
+check = "reply"
+contains = "19484400"
+
+[[fake_model]]
+tool_calls = [{ name = "get_balance", args = { account_id = "A001" } }]
+
+[[fake_model]]
+reply = "Your balance is ₹1,94,844.00."
+
+[[fake_model]]
+reply = "That is 19484400 paise."
