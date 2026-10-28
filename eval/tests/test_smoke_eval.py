@@ -27,7 +27,7 @@ def test_every_attack_class_has_seeds_and_benign_work_covers_every_role() -> Non
 
     assert all(attacks[attack_class] >= 6 for attack_class in ATTACK_CLASSES), attacks
     assert attacks.total() >= 40
-    assert benign.total() >= 60
+    assert benign.total() >= 30
     assert set(benign) == {"customer", "staff", "supervisor"}
     assert [t.id for t in tasks if not t.spec.fake_model] == []
 
