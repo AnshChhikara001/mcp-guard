@@ -45,7 +45,7 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from mcp_guard.agent.agent import Person
+from mcp_guard.agent.person import Person
 from mcp_guard.fake_servers.fx_rates import INJECTED_INSTRUCTIONS, FxMode
 
 type AttackClass = Literal[

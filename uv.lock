@@ -810,6 +810,7 @@ source = { editable = "agent" }
 dependencies = [
     { name = "anyio" },
     { name = "httpx" },
+    { name = "httpx2" },
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
     { name = "langchain-openai" },
@@ -825,6 +826,7 @@ dependencies = [
 requires-dist = [
     { name = "anyio", specifier = ">=4.15.1" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "httpx2", specifier = ">=2.13.1" },
     { name = "langchain-core", specifier = ">=1.6.12" },
     { name = "langchain-google-genai", specifier = ">=4.4.2" },
     { name = "langchain-openai", specifier = ">=1.7.2" },
@@ -882,6 +884,8 @@ dependencies = [
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
     { name = "presidio-analyzer" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "uvicorn" },
 ]
 
@@ -892,6 +896,8 @@ requires-dist = [
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.45.1" },
     { name = "opentelemetry-sdk", specifier = ">=1.45.1" },
     { name = "presidio-analyzer", specifier = ">=2.2.364" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.1" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
 

@@ -5,18 +5,20 @@ import os
 import threading
 import time
 import uuid
-from collections.abc import Generator, Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import AsyncGenerator, Generator, Iterator, Mapping
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import psycopg
 import pytest
+from mcp import Client
 from mcp.types import CallToolResult, TextContent
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
+from mcp_guard.agent.gateway import connect, login
 from mcp_guard.fake_servers.outbound import read_outbound
 from mcp_guard.fake_servers.reset import LOCAL_DATABASE_URL, reset
 from mcp_guard.gateway.process import RunningGateway, start_gateway
@@ -72,6 +74,14 @@ def gateway(seeded_database_url: str) -> Iterator[RunningGateway]:
     """The Gateway, started the way it runs for real, listening on a free local port."""
     with start_gateway(seeded_database_url) as running:
         yield running
+
+
+@asynccontextmanager
+async def gateway_client(gateway: RunningGateway, person: str = "S001") -> AsyncGenerator[Client]:
+    """An MCP client of the Gateway, logged in as `person` (by default Staff member S001)."""
+    logged_in = await login(gateway.url, person)
+    async with connect(gateway.url, logged_in.mcp_token) as client:
+        yield client
 
 
 @dataclass(frozen=True)

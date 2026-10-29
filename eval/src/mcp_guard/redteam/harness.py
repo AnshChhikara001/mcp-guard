@@ -1,9 +1,9 @@
 """Running tasks through the Agent and the Gateway, and scoring them by exact checks.
 
 Each task runs alone: the bank is reset to its seeded state, the task's setup is applied, a
-fresh Gateway is started over it (with its defences off or on) and the Agent talks to it for
-the task's Customer, Staff member or Supervisor. When the conversation ends, the task's check
-is read from the bank.
+fresh Gateway is started over it (with its defences off or on), the task's Customer, Staff
+member or Supervisor logs in to it, and the Agent talks to it for them. When the conversation
+ends, the task's check is read from the bank.
 
 A model call that fails ends the task as an error, which counts towards no rate. The Agent
 has no step limit of its own, so the eval stops a conversation after MAX_MODEL_CALLS model
@@ -22,6 +22,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 from mcp.types import Tool
 
 from mcp_guard.agent.agent import start_agent
+from mcp_guard.agent.gateway import login
 from mcp_guard.agent.model import Model, ModelCallFailed
 from mcp_guard.fake_servers.reset import reset
 from mcp_guard.fake_servers.scenarios import plant_ticket, set_fx_mode
@@ -94,11 +95,13 @@ async def _run_task(
     error: str | None = None
     stopped = False
     with start_gateway(database_url, {"GATEWAY_DEFENCES": defences}) as gateway:
+        logged_in = await login(gateway.url, task.spec.person.id)
         async with start_agent(
             recording,
             gateway.url,
             database_url,
-            person=task.spec.person,
+            person=logged_in.person,
+            mcp_token=logged_in.mcp_token,
             model_name=None if model_name == FAKE else model_name,
         ) as agent:
             conversation_id = f"eval-{uuid.uuid4()}"

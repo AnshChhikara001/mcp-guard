@@ -2,10 +2,9 @@
 
 import anyio
 import pytest
-from mcp import Client
 from mcp.types import CallToolResult
 
-from conftest import RunningGateway, error_message
+from conftest import RunningGateway, error_message, gateway_client
 
 pytestmark = pytest.mark.anyio
 
@@ -15,7 +14,7 @@ SEEDED_A001_BALANCE_PAISE = 194_844_00  # T00013 and T00014 on A001 are debits o
 async def test_a_refund_pays_the_amount_back_into_the_transactions_account(
     writable_gateway: RunningGateway,
 ) -> None:
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         result = await client.call_tool(
             "refund",
             {"transaction_id": "T00014", "amount_paise": 1_499_00, "idempotency_key": "k-1"},
@@ -41,7 +40,7 @@ async def test_repeating_a_refund_with_the_same_key_returns_the_first_result_and
     writable_gateway: RunningGateway,
 ) -> None:
     arguments = {"transaction_id": "T00013", "amount_paise": 1_000_00, "idempotency_key": "k-2"}
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         first = await client.call_tool("refund", arguments)
         repeated = await client.call_tool("refund", arguments)
         balance = await client.call_tool("get_balance", {"account_id": "A001"})
@@ -61,7 +60,7 @@ async def test_reusing_a_key_with_different_arguments_is_an_error_and_pays_nothi
     writable_gateway: RunningGateway, changed: dict[str, object]
 ) -> None:
     arguments = {"transaction_id": "T00013", "amount_paise": 1_000_00, "idempotency_key": "k-3"}
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         await client.call_tool("refund", arguments)
         reused = await client.call_tool("refund", {**arguments, **changed})
         balance = await client.call_tool("get_balance", {"account_id": "A001"})
@@ -74,7 +73,7 @@ async def test_reusing_a_key_with_different_arguments_is_an_error_and_pays_nothi
 async def test_refunds_of_a_transaction_add_up_to_at_most_its_debit(
     writable_gateway: RunningGateway,
 ) -> None:
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         await client.call_tool(
             "refund",
             {"transaction_id": "T00013", "amount_paise": 1_000_00, "idempotency_key": "k-4"},
@@ -108,7 +107,7 @@ async def test_refunds_of_a_transaction_add_up_to_at_most_its_debit(
 async def test_a_refund_that_cant_be_made_is_an_error_and_pays_nothing(
     writable_gateway: RunningGateway, transaction_id: str, amount_paise: int, message: str
 ) -> None:
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         result = await client.call_tool(
             "refund",
             {
@@ -130,14 +129,14 @@ async def test_refunds_made_at_the_same_time_still_add_up_to_at_most_the_debit(
     results: list[CallToolResult] = []
 
     async def refund_all_of_it(key: str) -> None:
-        async with Client(writable_gateway.url) as client:
+        async with gateway_client(writable_gateway) as client:
             arguments = {"transaction_id": "T00013", "amount_paise": 1_499_00}
             results.append(await client.call_tool("refund", {**arguments, "idempotency_key": key}))
 
     async with anyio.create_task_group() as group:
         for n in range(5):
             group.start_soon(refund_all_of_it, f"k-{n}")
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         balance = await client.call_tool("get_balance", {"account_id": "A001"})
 
     assert [r.is_error for r in results].count(False) == 1
@@ -151,14 +150,14 @@ async def test_one_key_used_for_two_refunds_at_the_same_time_pays_only_one(
     results: list[CallToolResult] = []
 
     async def refund_all_of(transaction_id: str) -> None:
-        async with Client(writable_gateway.url) as client:
+        async with gateway_client(writable_gateway) as client:
             arguments = {"transaction_id": transaction_id, "amount_paise": 1_499_00}
             results.append(await client.call_tool("refund", {**arguments, "idempotency_key": "k"}))
 
     async with anyio.create_task_group() as group:
         group.start_soon(refund_all_of, "T00013")
         group.start_soon(refund_all_of, "T00014")
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         balance = await client.call_tool("get_balance", {"account_id": "A001"})
 
     [failed] = [r for r in results if r.is_error]

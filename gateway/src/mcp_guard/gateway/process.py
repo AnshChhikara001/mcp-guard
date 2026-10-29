@@ -17,8 +17,14 @@ class RunningGateway:
     port: int
 
     @property
+    def base_url(self) -> str:
+        """Where the HTTP endpoints are, and the issuer of its tokens."""
+        return f"http://127.0.0.1:{self.port}"
+
+    @property
     def url(self) -> str:
-        return f"http://127.0.0.1:{self.port}/mcp"
+        """The MCP endpoint."""
+        return f"{self.base_url}/mcp"
 
 
 @contextmanager

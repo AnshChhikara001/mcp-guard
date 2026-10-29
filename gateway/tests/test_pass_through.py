@@ -7,7 +7,7 @@ import pytest
 from mcp import Client, StdioServerParameters
 from mcp.types import TextContent
 
-from conftest import RunningGateway
+from conftest import RunningGateway, gateway_client
 from mcp_guard.gateway.downstream import SERVERS
 
 pytestmark = pytest.mark.anyio
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.anyio
 async def test_client_sees_the_bank_servers_tools_as_the_gateways_own(
     gateway: RunningGateway,
 ) -> None:
-    async with Client(gateway.url) as client:
+    async with gateway_client(gateway) as client:
         listing = await client.list_tools()
 
     assert {
@@ -43,7 +43,7 @@ async def test_tool_definitions_reach_the_client_unchanged(
         args=SERVERS[server],
         env={**os.environ, "DATABASE_URL": seeded_database_url},
     )
-    async with Client(direct_server) as direct, Client(gateway.url) as through_gateway:
+    async with Client(direct_server) as direct, gateway_client(gateway) as through_gateway:
         expected = (await direct.list_tools()).tools
         listed = (await through_gateway.list_tools()).tools
 
@@ -51,7 +51,7 @@ async def test_tool_definitions_reach_the_client_unchanged(
 
 
 async def test_client_gets_a_seeded_customers_balance(gateway: RunningGateway) -> None:
-    async with Client(gateway.url) as client:
+    async with gateway_client(gateway) as client:
         accounts = await client.call_tool("list_accounts", {"customer_id": "C001"})
         balance = await client.call_tool("get_balance", {"account_id": "A001"})
 
@@ -77,7 +77,7 @@ async def test_client_gets_a_seeded_customers_balance(gateway: RunningGateway) -
 
 
 async def test_client_gets_a_seeded_customers_profile(gateway: RunningGateway) -> None:
-    async with Client(gateway.url) as client:
+    async with gateway_client(gateway) as client:
         result = await client.call_tool("get_customer_profile", {"customer_id": "C002"})
 
     assert not result.is_error
@@ -86,7 +86,7 @@ async def test_client_gets_a_seeded_customers_profile(gateway: RunningGateway) -
 
 
 async def test_downstream_errors_reach_the_client_unchanged(gateway: RunningGateway) -> None:
-    async with Client(gateway.url) as client:
+    async with gateway_client(gateway) as client:
         result = await client.call_tool("get_balance", {"account_id": "A999"})
 
     assert result.is_error
@@ -97,7 +97,7 @@ async def test_downstream_errors_reach_the_client_unchanged(gateway: RunningGate
 async def test_calling_a_tool_no_downstream_server_has_is_an_error(
     gateway: RunningGateway,
 ) -> None:
-    async with Client(gateway.url) as client:
+    async with gateway_client(gateway) as client:
         result = await client.call_tool("transfer_everything", {})
 
     assert result.is_error

@@ -19,12 +19,13 @@ reset-bank:
 gateway:
 	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-gateway
 
-# Chat with the Agent in the terminal as one Customer (needs make gateway). The model is MODEL,
-# e.g. gemini:gemini-3.5-flash (see .env.example); without it, the scripted fake model.
-# make chat CUSTOMER=C001 [CONVERSATION=<id from an earlier chat>] [MODEL=<provider:model>]
-CUSTOMER ?= C001
+# Chat with the Agent in the terminal, logged in as one Customer, Staff member or Supervisor
+# (needs make gateway). The model is MODEL, e.g. gemini:gemini-3.5-flash (see .env.example);
+# without it, the scripted fake model.
+# make chat PERSON=C001|S003|S004 [CONVERSATION=<id from an earlier chat>] [MODEL=<provider:model>]
+PERSON ?= C001
 chat:
-	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-chat --customer $(CUSTOMER) $(if $(CONVERSATION),--conversation $(CONVERSATION))
+	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-chat --person $(PERSON) $(if $(CONVERSATION),--conversation $(CONVERSATION))
 
 # Run the Red-team eval (needs make db; it resets the bank in DATABASE_URL for every task).
 # Running it again carries on where it stopped and retries tasks that ended in an error.

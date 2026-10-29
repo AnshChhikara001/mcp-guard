@@ -90,7 +90,10 @@ def backend() -> Iterator[FakeBackend]:
 
 
 def _value(value: AnyValue) -> object:
-    return getattr(value, value.WhichOneof("value") or "string_value")
+    kind = value.WhichOneof("value")
+    if kind == "array_value":
+        return [_value(v) for v in value.array_value.values]
+    return getattr(value, kind or "string_value")
 
 
 # A model that lists the Customer's accounts, then answers; every call reports its tokens.
@@ -126,7 +129,7 @@ def test_one_turn_is_one_trace_across_agent_model_gateway_and_downstream(
 
     with start_gateway(seeded_database_url, tracing) as gateway:
         subprocess.run(
-            ["mcp-guard-chat", "--customer", "C001", "--conversation", "conversation-1"],
+            ["mcp-guard-chat", "--person", "C001", "--conversation", "conversation-1"],
             input="Which accounts do I have?\n",
             env={
                 **os.environ,
@@ -170,6 +173,9 @@ def test_one_turn_is_one_trace_across_agent_model_gateway_and_downstream(
         if s.service == "mcp-guard-gateway" and s.name == "tools/call list_accounts"
     ]
     assert by_id[received.parent_span_id].service == "mcp-guard-agent"
+    # The Gateway knows who makes the call from their token.
+    assert received.attributes["user.id"] == "C001"
+    assert received.attributes["user.roles"] == ["customer"]
     [downstream] = [
         s
         for s in trace

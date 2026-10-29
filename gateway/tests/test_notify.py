@@ -1,9 +1,8 @@
 """Seam 1: the notify server through the Gateway: messages are recorded, never sent."""
 
 import pytest
-from mcp import Client
 
-from conftest import WritableBank, error_message
+from conftest import WritableBank, error_message, gateway_client
 
 pytestmark = pytest.mark.anyio
 
@@ -15,7 +14,7 @@ async def test_every_message_given_to_notify_is_recorded(writable_bank: Writable
         "body": "We refunded ₹1,499 to account 50100483920176.",
     }
     sms = {"to": "+91 9845012376", "body": "Your refund of ₹1,499 is on its way."}
-    async with Client(writable_bank.gateway.url) as client:
+    async with gateway_client(writable_bank.gateway) as client:
         sent_email = await client.call_tool("send_email", email)
         sent_sms = await client.call_tool("send_sms", sms)
 
@@ -31,7 +30,7 @@ async def test_repeating_a_message_with_the_same_key_returns_the_first_and_recor
     writable_bank: WritableBank,
 ) -> None:
     sms = {"to": "+91 9845012376", "body": "Your refund is on its way.", "idempotency_key": "h-1"}
-    async with Client(writable_bank.gateway.url) as client:
+    async with gateway_client(writable_bank.gateway) as client:
         first = await client.call_tool("send_sms", sms)
         repeated = await client.call_tool("send_sms", sms)
 
@@ -52,7 +51,7 @@ async def test_reusing_a_key_for_a_different_message_is_an_error_and_records_not
     writable_bank: WritableBank, tool: str, arguments: dict[str, str]
 ) -> None:
     sms = {"to": "+91 9845012376", "body": "Your refund.", "idempotency_key": "h-2"}
-    async with Client(writable_bank.gateway.url) as client:
+    async with gateway_client(writable_bank.gateway) as client:
         await client.call_tool("send_sms", sms)
         reused = await client.call_tool(tool, arguments | {"idempotency_key": "h-2"})
 

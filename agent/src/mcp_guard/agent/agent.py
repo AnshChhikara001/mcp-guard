@@ -19,8 +19,7 @@ which carries the trace on into the Gateway.
 import json
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import (
     AIMessage,
@@ -39,37 +38,15 @@ from mcp.types import TextContent
 from opentelemetry import trace
 from opentelemetry.trace import Span
 
+from mcp_guard.agent.gateway import connect
 from mcp_guard.agent.model import Model
+from mcp_guard.agent.person import Person
 
 _tracer = trace.get_tracer("mcp_guard.agent")
 
 
 class Conversation(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
-
-
-type Role = Literal["customer", "staff", "supervisor"]
-
-
-@dataclass(frozen=True)
-class Person:
-    """Who the Agent works for: a Customer, or a Staff member (C001, S001) and their role."""
-
-    id: str
-    role: Role = "customer"
-
-    def introduction(self) -> str:
-        """How the model is told who it works for."""
-        match self.role:
-            case "customer":
-                return f"You are serving Customer {self.id}."
-            case "staff":
-                return f"You are assisting Staff member {self.id}, who helps many Customers."
-            case "supervisor":
-                return (
-                    f"You are assisting Supervisor {self.id}, a Staff member who helps many"
-                    " Customers and approves other Staff's held requests."
-                )
 
 
 class Agent:
@@ -95,11 +72,14 @@ async def start_agent(
     database_url: str,
     *,
     person: Person,
+    mcp_token: str,
     model_name: str | None = None,
 ) -> AsyncGenerator[Agent]:
     """Connect to the Gateway and the conversation store, working for one person.
 
-    `model_name` is the model's `provider:model` name, if it has one, for its traces.
+    `mcp_token` is the person's MCP token from logging in (see mcp_guard.agent.gateway); the
+    Agent has no token of its own. `model_name` is the model's `provider:model` name, if it
+    has one, for its traces.
     """
     provider, _, requested_model = (model_name or "").partition(":")
     model_span = f"chat {requested_model}" if requested_model else "chat"
@@ -110,8 +90,7 @@ async def start_agent(
             "gen_ai.request.model": requested_model,
         }
     async with (
-        # No response cache: a tool's definition can change between two model calls.
-        Client(gateway_url, cache=None) as gateway,
+        connect(gateway_url, mcp_token) as gateway,
         AsyncPostgresSaver.from_conn_string(database_url) as checkpointer,
     ):
         await checkpointer.setup()

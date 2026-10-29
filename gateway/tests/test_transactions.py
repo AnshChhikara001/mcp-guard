@@ -1,15 +1,14 @@
 """Seam 1: the transactions server through the Gateway: listing transactions, raising disputes."""
 
 import pytest
-from mcp import Client
 
-from conftest import RunningGateway, error_message
+from conftest import RunningGateway, error_message, gateway_client
 
 pytestmark = pytest.mark.anyio
 
 
 async def test_client_lists_an_accounts_transactions_newest_first(gateway: RunningGateway) -> None:
-    async with Client(gateway.url) as client:
+    async with gateway_client(gateway) as client:
         result = await client.call_tool("list_transactions", {"account_id": "A001", "limit": 3})
 
     assert not result.is_error
@@ -48,7 +47,7 @@ async def test_client_lists_an_accounts_transactions_newest_first(gateway: Runni
 
 
 async def test_client_raises_a_dispute_on_a_transaction(writable_gateway: RunningGateway) -> None:
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         result = await client.call_tool(
             "raise_dispute",
             {"transaction_id": "T00028", "reason": "I never shopped at Skyline Electronics."},
@@ -68,7 +67,7 @@ async def test_client_raises_a_dispute_on_a_transaction(writable_gateway: Runnin
 async def test_raising_a_second_dispute_on_a_transaction_returns_the_open_one(
     writable_gateway: RunningGateway,
 ) -> None:
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         first = await client.call_tool(
             "raise_dispute", {"transaction_id": "T00014", "reason": "Charged twice."}
         )
@@ -88,7 +87,7 @@ async def test_raising_a_second_dispute_on_a_transaction_returns_the_open_one(
 async def test_listing_an_unknown_accounts_transactions_is_an_error(
     gateway: RunningGateway,
 ) -> None:
-    async with Client(gateway.url) as client:
+    async with gateway_client(gateway) as client:
         result = await client.call_tool("list_transactions", {"account_id": "A999"})
 
     assert "No account with ID A999" in error_message(result)
@@ -97,7 +96,7 @@ async def test_listing_an_unknown_accounts_transactions_is_an_error(
 async def test_disputing_an_unknown_transaction_is_an_error(
     writable_gateway: RunningGateway,
 ) -> None:
-    async with Client(writable_gateway.url) as client:
+    async with gateway_client(writable_gateway) as client:
         result = await client.call_tool(
             "raise_dispute", {"transaction_id": "T99999", "reason": "Not mine."}
         )
