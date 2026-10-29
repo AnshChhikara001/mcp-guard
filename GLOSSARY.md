@@ -30,7 +30,7 @@ _Avoid_: Mask, sanitize, scrub
 
 **Pseudonym**:
 A placeholder like `<PHONE_1>` that stands for one piece of a Customer's PII, so the model reasons over the placeholder and never sees the real value.
-_Avoid_: Token (collides with auth tokens), mask, placeholder
+_Avoid_: Token (collides with Login token), mask, placeholder
 
 **Taint**:
 The state of a conversation after the Agent has read untrusted content; while tainted, any Tool call that could send data outside the bank is held.
@@ -41,6 +41,10 @@ A tool whose definition (name, description, input schema) the Gateway has record
 _Avoid_: Locked, approved tool, whitelisted tool
 
 ### People
+
+**Person**:
+Whoever is logged in and has the Agent work for them: one Customer, Staff member or Supervisor. When Staff member S003 asks about Customer C001, the Person is S003 and C001 is the Customer being served.
+_Avoid_: User, identity, principal, caller
 
 **Customer**:
 A bank customer who talks to the Agent about their own accounts only.
@@ -53,6 +57,20 @@ _Avoid_: Support agent (collides with Agent), employee, operator
 **Supervisor**:
 A Staff member allowed to approve or reject Holds.
 _Avoid_: Admin, approver, manager
+
+### Login
+
+**Login token**:
+A short-lived statement, signed by the Gateway, naming one Person and their role (Customer, Staff or Supervisor). Each Person gets two at login, an MCP token and a UI token, which differ only in where they are accepted.
+_Avoid_: Token (collides with Pseudonym), session, credential
+
+**MCP token**:
+The Login token accepted only for connecting to the Gateway and making Tool calls; the only one an Agent ever holds.
+_Avoid_: Agent token, access token
+
+**UI token**:
+The Login token accepted only by the Gateway's endpoints for people, such as revealing Pseudonyms and approving Holds; never given to an Agent.
+_Avoid_: Admin token, web token
 
 ### Evaluation
 
