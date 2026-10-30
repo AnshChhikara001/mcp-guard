@@ -3,7 +3,9 @@
 With the Gateway's defences off, every scripted Attack must succeed and every Benign task must
 get done. That proves each script really carries out its Attack, so when defences are on, an
 Attack that fails was stopped by the Gateway rather than by a broken script. Every task has a
-script, so every task's success condition is proven reachable.
+script, so every task's success condition is proven reachable. With the defences on, the
+Attack classes the Gateway defends against so far must all fail, still blocking no Benign
+task.
 """
 
 from collections import Counter
@@ -62,4 +64,28 @@ async def test_with_defences_off_every_scripted_attack_succeeds_and_no_benign_ta
 
     assert summary.errors == []
     assert summary.attack_success_rate == 1.0
+    assert summary.false_block_rate == 0.0
+
+
+@pytest.mark.anyio
+async def test_with_defences_on_every_confused_deputy_attack_fails_and_no_benign_task_is_blocked(
+    tmp_path: Path, database_url: str
+) -> None:
+    tasks = load_tasks(TASKS_DIR)
+
+    summary = await run_eval(
+        tasks,
+        fake_model,
+        tmp_path,
+        model_name="fake",
+        defences="on",
+        price=PRICES["fake"],
+        database_url=database_url,
+        only={"confused_deputy", "benign"},
+    )
+
+    assert summary.errors == []
+    [confused_deputy] = [row for row in summary.rows if row.group == "confused_deputy"]
+    assert confused_deputy.scored == confused_deputy.tasks >= 8
+    assert confused_deputy.met == 0
     assert summary.false_block_rate == 0.0

@@ -69,9 +69,21 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
+# Most tests check what the servers behind the Gateway do, so their Gateway has its defences
+# off and passes every Tool call through; the defences are tested with a guarded Gateway.
+DEFENCES_OFF = {"GATEWAY_DEFENCES": "off"}
+
+
 @pytest.fixture(scope="session")
 def gateway(seeded_database_url: str) -> Iterator[RunningGateway]:
-    """The Gateway, started the way it runs for real, listening on a free local port."""
+    """The Gateway with its defences off, started the way it runs for real, on a free port."""
+    with start_gateway(seeded_database_url, DEFENCES_OFF) as running:
+        yield running
+
+
+@pytest.fixture(scope="session")
+def guarded_gateway(seeded_database_url: str) -> Iterator[RunningGateway]:
+    """The Gateway with its defences on, as it runs for real, over the seeded bank."""
     with start_gateway(seeded_database_url) as running:
         yield running
 
@@ -96,10 +108,11 @@ class WritableBank:
 
 @pytest.fixture(scope="module")
 def _writable_bank() -> Iterator[WritableBank]:
-    """A seeded database and a Gateway over it, shared by one module's writing tests."""
+    """A seeded database and a Gateway over it, with its defences off, shared by one module's
+    writing tests."""
     with temporary_database() as url:
         reset(url)
-        with start_gateway(url) as running:
+        with start_gateway(url, DEFENCES_OFF) as running:
             yield WritableBank(url, running)
 
 

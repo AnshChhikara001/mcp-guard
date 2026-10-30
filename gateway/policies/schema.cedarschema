@@ -1,0 +1,44 @@
+// What the Gateway's Cedar policies talk about. The Gateway validates every policy against
+// this schema when it starts, and refuses to start if one doesn't fit.
+//
+// The principal is the Person the Agent works for. Each action is one tool. The resource is
+// what the Tool call touches, looked up in the bank from the call's arguments: the Customer
+// who owns the account, transaction or profile, the Customer whose registered email or phone
+// a message goes to, the ticket, the inbox, or the currency vendor.
+
+entity Customer;
+entity Staff {
+  // The Customers this Staff member serves (bank.serving).
+  serves: Set<Customer>,
+};
+entity Supervisor;
+
+entity Ticket {
+  owner: Customer,
+};
+entity Inbox;
+entity Vendor;
+
+// Tools that read or act on one Customer's data.
+action ActForCustomer;
+// Tools that send a message to a Customer's registered email or phone.
+action MessageCustomer;
+// Tools that read the support inbox.
+action ReadInbox;
+
+action get_customer_profile, list_accounts, get_balance, list_transactions, raise_dispute, refund
+  in [ActForCustomer]
+  appliesTo { principal: [Customer, Staff, Supervisor], resource: Customer };
+
+action send_email, send_sms
+  in [MessageCustomer]
+  appliesTo { principal: [Customer, Staff, Supervisor], resource: Customer };
+
+action get_ticket in [ReadInbox]
+  appliesTo { principal: [Customer, Staff, Supervisor], resource: Ticket };
+
+action list_tickets in [ReadInbox]
+  appliesTo { principal: [Customer, Staff, Supervisor], resource: Inbox };
+
+action convert
+  appliesTo { principal: [Customer, Staff, Supervisor], resource: Vendor };

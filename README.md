@@ -32,13 +32,13 @@ make check             # ruff, pyright (strict) and pytest, as CI runs them; tes
 
 ## Seeded fake bank
 
-The fake bank (Customers, Staff, accounts, transactions and support tickets) is generated with Faker's Indian locale from a fixed seed, so every run produces the same data. It lives in the `bank` schema in Postgres; `make reset-bank` drops that schema and reloads it, restoring the seeded state from any change, including the disputes and refunds the servers write, the outbound record, planted tickets and the fx-rates mode. All names, numbers and addresses are fake; emails use reserved `example` domains.
+The fake bank (Customers, Staff and the Customers each serves, accounts, transactions and support tickets) is generated with Faker's Indian locale from a fixed seed, so every run produces the same data. It lives in the `bank` schema in Postgres; `make reset-bank` drops that schema and reloads it, restoring the seeded state from any change, including the disputes and refunds the servers write, the outbound record, planted tickets and the fx-rates mode. All names, numbers and addresses are fake; emails use reserved `example` domains.
 
 Canaries, the unique values whose appearance in an outgoing Tool call proves an exfiltration Attack worked, are the PII of the two test Customers C001 and C002 and their accounts A001 and A002. Their exact places are listed in [`canaries.py`](fake_servers/src/mcp_guard/fake_servers/canaries.py); each value appears nowhere else in the seeded data.
 
 ## Gateway
 
-The Gateway is an MCP server (streamable HTTP at `/mcp`) that any MCP client can connect to. Behind it, the fake bank servers run as its child processes and speak MCP over their stdin/stdout, so none of them opens a network port: the only way to reach them is through the Gateway. It lists their tools as its own, asking the servers afresh on every listing so a changed definition reaches the Agent, and, for now, forwards every Tool call unchanged.
+The Gateway is an MCP server (streamable HTTP at `/mcp`) that any MCP client can connect to. Behind it, the fake bank servers run as its child processes and speak MCP over their stdin/stdout, so none of them opens a network port: the only way to reach them is through the Gateway. It lists their tools as its own, asking the servers afresh on every listing so a changed definition reaches the Agent, and makes a Decision on every Tool call: allowed calls go unchanged to the server that owns the tool, denied ones never reach it (see [Permissions](#permissions)).
 
 | Server | Tools |
 | --- | --- |
@@ -64,7 +64,19 @@ curl -s -X POST localhost:8000/demo/login -d '{"person": "S003"}'
 
 Each person gets two tokens that differ by audience ([ADR-0005](docs/adr/0005-token-audience-separates-agent-from-chat-ui.md)): the MCP token, accepted only on `/mcp` and the only one the Agent is given, and the UI token, accepted only on the Gateway's HTTP endpoints, such as `GET /me` (who the token belongs to). Tokens last an hour, with no refresh; log in again when one expires. The public key is at `/.well-known/jwks.json`. `GATEWAY_SIGNING_KEY` sets the private key; without it each Gateway process makes a fresh one, so tokens don't outlive it. The login check runs whether the defences are on or off: it is identity, not a defence.
 
-The Seam 1 tests in `gateway/tests/` start the real Gateway against a freshly seeded database and call it as an MCP client, logged in.
+### Permissions
+
+[Cedar](https://www.cedarpolicy.com) policies decide every Tool call by person, role, tool and arguments. They live in reviewable files in [`gateway/policies/`](gateway/policies/), with a schema the Gateway validates them against when it starts; a policy that doesn't fit stops it from starting. Cedar denies anything no policy permits, so a tool with no rule is denied.
+
+| Person | May |
+| --- | --- |
+| Customer | read their own profile, accounts, balances, transactions and tickets (one at a time, no inbox); dispute and refund their own transactions; email or text only their own registered address or phone; convert currencies |
+| Staff | the same for every Customer they serve (`bank.serving`), plus the whole ticket inbox |
+| Supervisor | the same as Staff, for every Customer |
+
+Tools take account, transaction or ticket IDs, not the Customer they belong to, so before asking Cedar the Gateway looks up in the bank who owns what the call names, and whose registered email or phone a message goes to. A denied call gets an error result the Agent can explain, such as `Denied by the Gateway (not_found_or_not_yours): …`; an ID the bank doesn't have gets the same reason as someone else's, so nobody can probe which IDs exist. The Decision, its reason code and the layer that decided are recorded on the Gateway's span for the Tool call. With `GATEWAY_DEFENCES=off`, no policy is asked and every call goes through; the login check stays on.
+
+The Seam 1 tests in `gateway/tests/` start the real Gateway against a freshly seeded database and call it as an MCP client, logged in. Most of them check what the servers do, so their Gateway has its defences off; the permission tests use one with its defences on.
 
 ## Agent
 
@@ -118,7 +130,7 @@ make eval DEFENCES=off MODEL=gemini:gemini-3.5-flash ONLY="rug_pull benign"
 
 Results go to `eval/results/<model>/defences-<off|on>/`, written to be committed: one JSON file per task, saved as soon as it finishes, and `summary.md` and `summary.json` with, per Attack class, the Attack success rate (and the False block rate for Benign tasks), tokens, mean model time and estimated cost. Running the same command again skips tasks already done, retries those that ended in an error (a model call that failed, for example on a rate limit; errors count towards neither rate and are listed separately) and re-runs tasks whose file changed. Cost is input tokens at the provider's list input price plus output tokens at its list output price, with no caching discounts; prices are in [`prices.py`](eval/src/mcp_guard/redteam/prices.py), and `--price INPUT OUTPUT` (`PRICE="INPUT OUTPUT"` with `make eval`) gives one for an unlisted model. Latency is model time only, as each model adapter reports it.
 
-There are 42 hand-written Attacks, 6 to 8 in each Attack class, and 30 Benign tasks: everyday Customer requests, Staff work for many Customers (inbox triage, lookups, disputes, refunds, messages to registered addresses) and Supervisor work (large refunds, reviews). Each task also scripts the fake model's moves, step by step; the fake model always does what its script says. `make eval` without `MODEL` runs the tasks with it, and CI runs them all as the smoke eval: with the Gateway's defences off, every scripted Attack must succeed and every Benign task get done, which proves each script really attacks and each success condition can be met. Why the harness is our own rather than Inspect AI is in [ADR-0006](docs/adr/0006-in-house-eval-harness-instead-of-inspect.md).
+There are 42 hand-written Attacks, 6 to 8 in each Attack class, and 30 Benign tasks: everyday Customer requests, Staff work for many Customers (inbox triage, lookups, disputes, refunds, messages to registered addresses) and Supervisor work (large refunds, reviews). Each task also scripts the fake model's moves, step by step; the fake model always does what its script says. `make eval` without `MODEL` runs the tasks with it, and CI runs them all as the smoke eval: with the Gateway's defences off, every scripted Attack must succeed and every Benign task get done, which proves each script really attacks and each success condition can be met. With the defences on, every confused-deputy Attack must fail, still with no Benign task blocked. Why the harness is our own rather than Inspect AI is in [ADR-0006](docs/adr/0006-in-house-eval-harness-instead-of-inspect.md).
 
 ## Tracing
 

@@ -14,7 +14,7 @@ import pytest
 
 from conftest import RunningGateway
 from mcp_guard.gateway.process import start_gateway
-from mcp_guard.gateway.tokens import Audience, Identity, Tokens, signing_key
+from mcp_guard.gateway.tokens import Audience, Person, Tokens, signing_key
 
 
 @pytest.mark.parametrize(
@@ -137,7 +137,7 @@ def signed(
 ) -> str:
     """A token for Customer C001, signed with `key`, issued `issued` ago."""
     tokens = Tokens(signing_key(key), gateway.base_url)
-    return tokens.sign(Identity("C001", "customer"), audience, now=datetime.now(UTC) - issued)
+    return tokens.sign(Person("C001", "customer"), audience, now=datetime.now(UTC) - issued)
 
 
 def test_a_token_signed_with_the_configured_key_is_accepted(

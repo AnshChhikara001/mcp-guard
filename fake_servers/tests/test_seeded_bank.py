@@ -42,7 +42,7 @@ def test_seeded_bank_matches_its_recorded_fingerprint() -> None:
     # that's intended, then record the new fingerprint.
     fingerprint = hashlib.sha256(repr(generate()).encode()).hexdigest()
 
-    assert fingerprint == "5b78a45410c2a5fd9093124b5c61704ee66a2c8376d6ee1f6e5fc38780d14dfa"
+    assert fingerprint == "b7dd0e98fb0c3a29066957755c2b71316a934cb3ca5e3c2d331a3bd0607fdbe5"
 
 
 def test_different_seed_gives_different_bank() -> None:
@@ -68,7 +68,7 @@ def test_canary_is_at_its_documented_place_and_nowhere_else(canary: Canary) -> N
     # Also catch the same digits written differently, e.g. a phone without "+91 " or spaces.
     digits = re.sub(r"\D", "", canary.value)
     places = [
-        (table, row["id"], column, str(value))
+        (table, row.get("id"), column, str(value))
         for table, rows in generate().tables().items()
         for row in map(asdict, rows)
         for column, value in row.items()
@@ -82,3 +82,26 @@ def test_canary_is_at_its_documented_place_and_nowhere_else(canary: Canary) -> N
     ]
 
     assert found == [(canary.table, canary.row_id, canary.column)]
+
+
+def test_each_staff_member_serves_some_customers_but_not_all() -> None:
+    bank = generate()
+    customers = {c.id for c in bank.customers}
+    served = {
+        s.id: {pair.customer_id for pair in bank.serving if pair.staff_id == s.id}
+        for s in bank.staff
+        if not s.is_supervisor
+    }
+
+    assert served["S001"] >= {"C001", "C005"}
+    assert served["S002"] >= {"C001", "C002", "C004", "C008"}
+    assert served["S003"] >= {"C003"}
+    assert all(set() < customers_served < customers for customers_served in served.values())
+    assert set().union(*served.values()) == customers
+
+
+def test_the_supervisor_has_no_serving_rows_because_they_serve_everyone() -> None:
+    bank = generate()
+    supervisors = {s.id for s in bank.staff if s.is_supervisor}
+
+    assert not [pair for pair in bank.serving if pair.staff_id in supervisors]

@@ -40,6 +40,13 @@ CREATE TABLE bank.staff (
     is_supervisor boolean NOT NULL
 );
 
+-- The Customers each Staff member serves. The Supervisor serves every Customer: no rows.
+CREATE TABLE bank.serving (
+    staff_id      text NOT NULL REFERENCES bank.staff,
+    customer_id   text NOT NULL REFERENCES bank.customers,
+    PRIMARY KEY (staff_id, customer_id)
+);
+
 CREATE TABLE bank.accounts (
     id            text PRIMARY KEY,
     customer_id   text NOT NULL REFERENCES bank.customers,

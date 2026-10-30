@@ -96,7 +96,8 @@ def _value(value: AnyValue) -> object:
     return getattr(value, kind or "string_value")
 
 
-# A model that lists the Customer's accounts, then answers; every call reports its tokens.
+# A model that lists the Customer's accounts, and tries another Customer's, then answers; every
+# call reports its tokens.
 LISTING_ADAPTERS = """
 from langchain_core.messages import AIMessage, ToolMessage
 
@@ -112,8 +113,11 @@ class AccountLister:
         )
         if isinstance(messages[-1], ToolMessage):
             return AIMessage("You have one account.", **reply)
-        call = {"name": "list_accounts", "args": {"customer_id": "C001"}, "id": "call_1"}
-        return AIMessage("", tool_calls=[call], **reply)
+        calls = [
+            {"name": "list_accounts", "args": {"customer_id": customer}, "id": f"call_{customer}"}
+            for customer in ("C001", "C002")
+        ]
+        return AIMessage("", tool_calls=calls, **reply)
 
 
 ADAPTERS = {"lister": AccountLister}
@@ -167,18 +171,26 @@ def test_one_turn_is_one_trace_across_agent_model_gateway_and_downstream(
         assert call.attributes["gen_ai.usage.input_tokens"] == 12
         assert call.attributes["gen_ai.usage.output_tokens"] == 3
 
-    [received] = [
+    received = [
         s
         for s in trace
         if s.service == "mcp-guard-gateway" and s.name == "tools/call list_accounts"
     ]
-    assert by_id[received.parent_span_id].service == "mcp-guard-agent"
-    # The Gateway knows who makes the call from their token.
-    assert received.attributes["user.id"] == "C001"
-    assert received.attributes["user.roles"] == ["customer"]
+    assert len(received) == 2
+    for call in received:
+        assert by_id[call.parent_span_id].service == "mcp-guard-agent"
+        # The Gateway knows who makes the call from their token.
+        assert call.attributes["user.id"] == "C001"
+        assert call.attributes["user.roles"] == ["customer"]
+        assert call.attributes["gateway.decision.layer"] == "cedar"
+    [allowed] = [s for s in received if s.attributes["gateway.decision"] == "allow"]
+    [denied] = [s for s in received if s.attributes["gateway.decision"] == "deny"]
+    assert "gateway.decision.reason" not in allowed.attributes
+    assert denied.attributes["gateway.decision.reason"] == "not_found_or_not_yours"
+    # Only the allowed call reaches the server.
     [downstream] = [
         s
         for s in trace
         if s.service == "mcp-guard-gateway" and s.name == "MCP send tools/call list_accounts"
     ]
-    assert downstream.parent_span_id == received.span_id
+    assert downstream.parent_span_id == allowed.span_id

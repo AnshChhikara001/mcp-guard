@@ -29,10 +29,10 @@ ROLES: tuple[Role, ...] = ("customer", "staff", "supervisor")
 
 
 @dataclass(frozen=True)
-class Identity:
-    """Who a token was issued to."""
+class Person:
+    """Who a token was issued to: a Customer, Staff member or Supervisor (C001, S003)."""
 
-    person: str
+    id: str
     role: Role
 
 
@@ -58,19 +58,19 @@ class Tokens:
     def audience(self, audience: Audience) -> str:
         return self.mcp_url if audience == "mcp" else self.issuer
 
-    def sign(self, identity: Identity, audience: Audience, now: datetime | None = None) -> str:
+    def sign(self, person: Person, audience: Audience, now: datetime | None = None) -> str:
         issued_at = now or datetime.now(UTC)
         claims = {
             "iss": self.issuer,
             "aud": self.audience(audience),
-            "sub": identity.person,
-            "role": identity.role,
+            "sub": person.id,
+            "role": person.role,
             "iat": issued_at,
             "exp": issued_at + TOKEN_LIFETIME,
         }
         return jwt.encode(claims, self._key, algorithm="EdDSA")
 
-    def check(self, token: str, audience: Audience) -> Identity | None:
+    def check(self, token: str, audience: Audience) -> Person | None:
         """Who the token names, if it is ours, unexpired and for `audience`; else None."""
         try:
             claims = jwt.decode(
@@ -86,7 +86,7 @@ class Tokens:
         role = claims.get("role")
         if role not in ROLES:
             return None
-        return Identity(claims["sub"], role)
+        return Person(claims["sub"], role)
 
     def jwks(self) -> dict[str, Any]:
         """The public key, for anyone checking a token."""
@@ -101,19 +101,19 @@ class McpTokenVerifier:
         self._tokens = tokens
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        identity = self._tokens.check(token, "mcp")
-        if identity is None:
+        person = self._tokens.check(token, "mcp")
+        if person is None:
             return None
         return AccessToken(
             token=token,
-            client_id=identity.person,
+            client_id=person.id,
             scopes=[],
-            subject=identity.person,
-            claims={"iss": self._tokens.issuer, "role": identity.role},
+            subject=person.id,
+            claims={"iss": self._tokens.issuer, "role": person.role},
         )
 
 
-def identity_of(access_token: AccessToken) -> Identity:
+def person_of(access_token: AccessToken) -> Person:
     """The person and role of an MCP token McpTokenVerifier accepted."""
     role: Role = (access_token.claims or {})["role"]
-    return Identity(access_token.subject or access_token.client_id, role)
+    return Person(access_token.subject or access_token.client_id, role)
