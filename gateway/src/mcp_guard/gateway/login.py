@@ -43,13 +43,9 @@ def routes(tokens: Tokens) -> list[Route]:
         )
 
     async def me(request: Request) -> JSONResponse:
-        person = _ui_person(request, tokens)
+        person = ui_person(request, tokens)
         if person is None:
-            return JSONResponse(
-                {"error": "invalid_token", "error_description": "A UI token is required"},
-                status_code=401,
-                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
-            )
+            return ui_token_required()
         return JSONResponse({"person": person.id, "role": person.role})
 
     async def jwks(request: Request) -> JSONResponse:
@@ -62,9 +58,18 @@ def routes(tokens: Tokens) -> list[Route]:
     ]
 
 
-def _ui_person(request: Request, tokens: Tokens) -> Person | None:
+def ui_person(request: Request, tokens: Tokens) -> Person | None:
     """Who the request's UI token names; None without a valid one (an MCP token isn't one)."""
     scheme, _, token = request.headers.get("Authorization", "").partition(" ")
     if scheme.lower() != "bearer":
         return None
     return tokens.check(token, "ui")
+
+
+def ui_token_required() -> JSONResponse:
+    """The 401 for a request to a people's endpoint without a valid UI token."""
+    return JSONResponse(
+        {"error": "invalid_token", "error_description": "A UI token is required"},
+        status_code=401,
+        headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+    )

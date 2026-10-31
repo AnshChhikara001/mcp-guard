@@ -13,13 +13,18 @@ defences; with them off, no policy is asked and every call is allowed.
 Every MCP request must carry the person's MCP token (see tokens.py): the MCP SDK's bearer auth
 refuses one without it, so the Gateway knows the person and role behind every Tool call. The
 login check runs with the defences on or off: it is identity, not a defence. The Gateway's
-HTTP endpoints (login.py) are served beside /mcp.
+HTTP endpoints (login.py, audit_api.py) are served beside /mcp.
+
+Every Decision is written to the Audit log (audit.py) before an allowed call is forwarded,
+with the conversation the client names in the call's `_meta` (`mcp-guard/conversation`) or
+else its MCP session. A call the log can't record is denied.
 
 The MCP SDK traces every Tool call: a span for the call the Gateway receives, joined to the
 caller's trace through the request's `_meta`, and inside it a span for the call to the
 downstream server. The Gateway's span records who made the call (`user.id`, `user.roles`) and
 its Decision (`gateway.decision`, `gateway.decision.reason` and `gateway.decision.layer`, the
-layer that decided). Spans are sent only if tracing is configured (see tracing.py).
+layer that decided), and the number of its Audit entry (`gateway.audit.id`). Spans are sent
+only if tracing is configured (see tracing.py).
 """
 
 import os
@@ -28,10 +33,12 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
+import psycopg
 import uvicorn
 from mcp.server import Server, ServerRequestContext
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.settings import AuthSettings
+from mcp.server.streamable_http import MCP_SESSION_ID_HEADER
 from mcp.types import (
     CallToolRequestParams,
     CallToolResult,
@@ -43,7 +50,7 @@ from opentelemetry import trace
 from starlette.applications import Starlette
 from starlette.requests import Request
 
-from mcp_guard.gateway import login
+from mcp_guard.gateway import audit, audit_api, login
 from mcp_guard.gateway.decisions import Allow, Decision, Deny
 from mcp_guard.gateway.downstream import Downstream, connect
 from mcp_guard.gateway.permissions import Permissions, PolicyError, configured_policies_dir
@@ -51,6 +58,9 @@ from mcp_guard.gateway.tokens import McpTokenVerifier, Person, Tokens, person_of
 from mcp_guard.gateway.tracing import start_tracing, stop_tracing
 
 ALLOWED_WITH_DEFENCES_OFF = Allow("defences_off")
+
+# Where a client names the conversation a Tool call belongs to, in the call's `_meta`.
+CONVERSATION_META_KEY = "mcp-guard/conversation"
 
 
 @dataclass(frozen=True)
@@ -81,6 +91,16 @@ async def call_tool(
         decision = ALLOWED_WITH_DEFENCES_OFF
     else:
         decision = await gateway.permissions.decide(person, params.name, params.arguments)
+    try:
+        entry_id = await audit.record(
+            person, _conversation(ctx, params), params.name, params.arguments, decision
+        )
+        span.set_attribute("gateway.audit.id", entry_id)
+    except (psycopg.Error, OSError):
+        # Fail closed: a call the Audit log can't record isn't made.
+        decision = Deny(
+            "gateway", "audit_failed", "The Gateway couldn't record this call, so it wasn't made."
+        )
     span.set_attributes(_decision_attributes(decision))
     match decision:
         case Allow():
@@ -102,6 +122,16 @@ def _decision_attributes(decision: Decision) -> dict[str, str]:
                 "gateway.decision.reason": reason,
                 "gateway.decision.layer": layer,
             }
+
+
+def _conversation(ctx: ServerRequestContext[Gateway], params: CallToolRequestParams) -> str | None:
+    """The conversation the call belongs to: the one the client names in the call's `_meta`,
+    or else its MCP session."""
+    named = (params.meta or {}).get(CONVERSATION_META_KEY)
+    if isinstance(named, str) and named:
+        return named
+    request = ctx.request
+    return request.headers.get(MCP_SESSION_ID_HEADER) if isinstance(request, Request) else None
 
 
 def _person(ctx: ServerRequestContext[Gateway]) -> Person:
@@ -150,7 +180,7 @@ def app(tokens: Tokens, permissions: Permissions | None, host: str = "127.0.0.1"
             }
         ),
         token_verifier=McpTokenVerifier(tokens),
-        custom_starlette_routes=login.routes(tokens),
+        custom_starlette_routes=[*login.routes(tokens), *audit_api.routes(tokens)],
     )
 
 
@@ -168,6 +198,10 @@ def main() -> None:
         permissions = Permissions(configured_policies_dir()) if defences == "on" else None
     except (ValueError, PolicyError) as e:
         sys.exit(str(e))
+    try:
+        audit.setup()
+    except psycopg.Error as e:
+        sys.exit(f"Couldn't set up the Audit log in DATABASE_URL: {e}")
     start_tracing("mcp-guard-gateway")
     gateway = app(Tokens(key, f"http://{host}:{port}"), permissions, host)
     uvicorn.run(gateway, host=host, port=port)

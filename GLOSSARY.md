@@ -40,6 +40,14 @@ _Avoid_: Contaminated, flagged, unsafe
 A tool whose definition (name, description, input schema) the Gateway has recorded and approved; if the definition later changes, the tool is disabled until a Supervisor approves the change.
 _Avoid_: Locked, approved tool, whitelisted tool
 
+**Audit log**:
+The append-only record of every Decision the Gateway makes, one Audit entry per Tool call, chained by hash so that editing an entry is detectable.
+_Avoid_: Audit trail, log, history
+
+**Audit entry**:
+One record in the Audit log: the Person and their role, conversation, tool, arguments, Decision, reason, deciding layer and time of one Tool call, plus its hash and the previous entry's hash.
+_Avoid_: Log line, event, record; "fingerprint" for its hash (the seeded bank's fingerprint is a different thing)
+
 ### People
 
 **Person**:

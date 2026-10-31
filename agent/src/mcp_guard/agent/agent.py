@@ -9,7 +9,8 @@ so a conversation carries on after the Agent restarts.
 
 Each turn is one trace: a span for the turn, a span for every model call (with its tokens,
 named by the OpenTelemetry GenAI conventions) and the MCP SDK's span for every Tool call,
-which carries the trace on into the Gateway.
+which carries the trace on into the Gateway. Every Tool call names its conversation in its
+`_meta` (under `mcp-guard/conversation`), so the Gateway's Audit log can tell them apart.
 """
 
 # LangGraph is a namespace package that pyright doesn't see as typed, and some of its
@@ -29,12 +30,13 @@ from langchain_core.messages import (
     ToolCall,
     ToolMessage,
 )
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from mcp import Client
-from mcp.types import TextContent
+from mcp.types import RequestParamsMeta, TextContent
 from opentelemetry import trace
 from opentelemetry.trace import Span
 
@@ -43,6 +45,9 @@ from mcp_guard.agent.model import Model
 from mcp_guard.agent.person import Person
 
 _tracer = trace.get_tracer("mcp_guard.agent")
+
+# Where every Tool call names its conversation for the Gateway, in the call's `_meta`.
+CONVERSATION_META_KEY = "mcp-guard/conversation"
 
 
 class Conversation(TypedDict):
@@ -109,11 +114,13 @@ async def start_agent(
                 _record_model_call(span, reply)
             return Conversation(messages=[reply])
 
-        async def call_tools(state: Conversation) -> Conversation:
+        async def call_tools(state: Conversation, config: RunnableConfig) -> Conversation:
             last = state["messages"][-1]
             assert isinstance(last, AIMessage)
+            conversation_id = str(config.get("configurable", {})["thread_id"])
             results: list[AnyMessage] = [
-                await _call_through_gateway(gateway, call) for call in last.tool_calls
+                await _call_through_gateway(gateway, call, conversation_id)
+                for call in last.tool_calls
             ]
             return Conversation(messages=results)
 
@@ -143,9 +150,15 @@ def _after_model(state: Conversation) -> str:
     return "tools" if isinstance(last, AIMessage) and last.tool_calls else END
 
 
-async def _call_through_gateway(gateway: Client, call: ToolCall) -> ToolMessage:
-    """Make one Tool call through the Gateway; its result becomes a message for the model."""
-    result = await gateway.call_tool(call["name"], call["args"])
+async def _call_through_gateway(
+    gateway: Client, call: ToolCall, conversation_id: str
+) -> ToolMessage:
+    """Make one Tool call through the Gateway; its result becomes a message for the model.
+
+    The call names its conversation in `_meta`, so the Gateway can tell conversations apart.
+    """
+    meta: RequestParamsMeta = {CONVERSATION_META_KEY: conversation_id}
+    result = await gateway.call_tool(call["name"], call["args"], meta=meta)
     if result.structured_content is not None:
         content = json.dumps(result.structured_content, ensure_ascii=False)
     else:

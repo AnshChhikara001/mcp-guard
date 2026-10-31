@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 
+import httpx
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage
 from mcp.types import Tool
@@ -126,3 +127,18 @@ async def test_a_tool_definition_changed_mid_conversation_reaches_the_model(
         await agent.ask("conversation-1", "And 200?")
 
     assert [INJECTED_INSTRUCTIONS in description for description in seen] == [False, True]
+
+
+async def test_every_tool_call_names_its_conversation_in_the_audit_log(
+    gateway: RunningGateway, database_url: str
+) -> None:
+    async with agent_for(ScriptedModel(balance_script("C001")), gateway, database_url) as agent:
+        await agent.ask("conversation-audited", "What's my balance?")
+
+    supervisor = httpx.post(f"{gateway.base_url}/demo/login", json={"person": "S004"}).json()
+    newest = httpx.get(
+        f"{gateway.base_url}/audit",
+        params={"limit": 1},
+        headers={"Authorization": f"Bearer {supervisor['ui_token']}"},
+    ).json()["entries"]
+    assert [(e["person"], e["conversation"]) for e in newest] == [("C001", "conversation-audited")]

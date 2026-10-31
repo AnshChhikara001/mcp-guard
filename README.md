@@ -76,6 +76,22 @@ Each person gets two tokens that differ by audience ([ADR-0005](docs/adr/0005-to
 
 Tools take account, transaction or ticket IDs, not the Customer they belong to, so before asking Cedar the Gateway looks up in the bank who owns what the call names, and whose registered email or phone a message goes to. A denied call gets an error result the Agent can explain, such as `Denied by the Gateway (not_found_or_not_yours): …`; an ID the bank doesn't have gets the same reason as someone else's, so nobody can probe which IDs exist. The Decision, its reason code and the layer that decided are recorded on the Gateway's span for the Tool call. With `GATEWAY_DEFENCES=off`, no policy is asked and every call goes through; the login check stays on.
 
+### Audit log
+
+Every Tool call's Decision is written to the Audit log, one Audit entry per call, before an allowed call is forwarded: the person and role, the conversation, the tool and its arguments as sent, the Decision, its reason code, the layer that decided, and the time (UTC, to the microsecond). That includes calls to unknown tools and calls made with the defences off (`allow`, layer `defences_off`); listing tools writes nothing, and the tool's result isn't kept. If an entry can't be written, the call is denied (`audit_failed`) and never reaches the server. The entry's number goes on the call's span as `gateway.audit.id`.
+
+The conversation is the one a client names in each Tool call's `_meta` under `mcp-guard/conversation`, as the Agent and the Red-team eval do. A client that names none is logged under its MCP session ID; a client on MCP protocol 2026-07-28, which has no sessions, is logged with no conversation.
+
+Entries live in Postgres in `gateway.audit`, in the Gateway's own `gateway` schema, so resetting the bank leaves them alone; the Gateway creates the table at startup if it is missing. The Gateway only inserts, and a trigger refuses any update, delete or truncate. Each entry's hash is SHA-256 over canonical JSON of its fields and the previous entry's hash (64 zeros for the first), and entries are written one at a time, numbered in order. A Supervisor reads the log and checks the chain over HTTP with their UI token (anyone else gets 403):
+
+```sh
+curl -s localhost:8000/audit?limit=50 -H "Authorization: Bearer $UI_TOKEN"            # newest first; ?before=<id> for the next page
+curl -s localhost:8000/audit/verify -H "Authorization: Bearer $UI_TOKEN"
+# {"intact": true, "entries": 1042}  or  {"intact": false, "first_broken": 317}
+```
+
+What the chain can't catch: the hash has no secret key, so a database admin who edits an entry and then rewrites the hash of every entry after it goes undetected, and deleting the newest entry leaves no break (deleting any other shows as a break at the entry after it).
+
 The Seam 1 tests in `gateway/tests/` start the real Gateway against a freshly seeded database and call it as an MCP client, logged in. Most of them check what the servers do, so their Gateway has its defences off; the permission tests use one with its defences on.
 
 ## Agent
