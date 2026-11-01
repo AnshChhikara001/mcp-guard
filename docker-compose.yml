@@ -3,7 +3,13 @@ name: mcp-guard
 
 services:
   postgres:
+    # Not the alpine build: it sorts text differently and can't open data made by this one.
     image: postgres:17
+    # Small settings for an 8 GB Mac: a 32 MB cache instead of 128 MB, fewer connections
+    # (tests open up to about 20 at once), and less memory per sort. The container is
+    # capped at 256 MB.
+    command: postgres -c shared_buffers=32MB -c max_connections=30 -c work_mem=2MB
+    mem_limit: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mcpguard}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcpguard}
