@@ -25,7 +25,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
-from mcp_guard.gateway.decisions import Allow, Decision, Deny
+from mcp_guard.gateway.decisions import Decision, fields_of
 from mcp_guard.gateway.tokens import Person
 
 LOCAL_DATABASE_URL = "postgresql://mcpguard:mcpguard@localhost:5432/mcpguard"
@@ -145,16 +145,12 @@ async def record(
     tool: str,
     arguments: dict[str, Any] | None,
     decision: Decision,
-) -> int:
-    """Append the Decision on one Tool call to the Audit log; the new entry's id.
+) -> Entry:
+    """Append the Decision on one Tool call to the Audit log; the new entry.
 
     `arguments` are stored as sent; a call sent with none is stored with `{}`.
     """
-    match decision:
-        case Allow(layer=layer):
-            outcome, reason = "allow", None
-        case Deny(layer=layer, reason=reason):
-            outcome = "deny"
+    decided = fields_of(decision)
     async with await psycopg.AsyncConnection.connect(
         _database_url(), connect_timeout=CONNECT_TIMEOUT_SECONDS
     ) as conn:
@@ -171,9 +167,9 @@ async def record(
             "conversation": conversation,
             "tool": tool,
             "arguments": arguments or {},
-            "decision": outcome,
-            "reason": reason,
-            "layer": layer,
+            "decision": decided["decision"],
+            "reason": decided["reason"],
+            "layer": decided["layer"],
             "previous_hash": previous_hash,
         }
         fields["hash"] = entry_hash(fields)
@@ -181,7 +177,7 @@ async def record(
             f"INSERT INTO gateway.audit ({COLUMNS}) VALUES ({PLACEHOLDERS})",
             [Json(v) if k == "arguments" else v for k, v in fields.items()],
         )
-    return fields["id"]
+    return Entry(**fields)
 
 
 async def read(before: int | None = None, limit: int = PAGE_SIZE) -> list[Entry]:
@@ -193,6 +189,21 @@ async def read(before: int | None = None, limit: int = PAGE_SIZE) -> list[Entry]
         await cursor.execute(
             f"SELECT {COLUMNS} FROM gateway.audit WHERE id < %s ORDER BY id DESC LIMIT %s",
             (before if before is not None else 2**63 - 1, limit),
+        )
+        return [Entry(**row) for row in await cursor.fetchall()]
+
+
+async def read_after(after: int, person: str | None = None, limit: int = PAGE_SIZE) -> list[Entry]:
+    """The first `limit` entries numbered above `after`, oldest first; only `person`'s if one
+    is given."""
+    async with await psycopg.AsyncConnection.connect(
+        _database_url(), connect_timeout=CONNECT_TIMEOUT_SECONDS
+    ) as conn:
+        cursor = conn.cursor(row_factory=dict_row)
+        await cursor.execute(
+            f"SELECT {COLUMNS} FROM gateway.audit"
+            " WHERE id > %s AND (%s::text IS NULL OR person = %s) ORDER BY id LIMIT %s",
+            (after, person, person, limit),
         )
         return [Entry(**row) for row in await cursor.fetchall()]
 

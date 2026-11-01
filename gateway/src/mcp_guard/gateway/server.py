@@ -17,7 +17,12 @@ HTTP endpoints (login.py, audit_api.py) are served beside /mcp.
 
 Every Decision is written to the Audit log (audit.py) before an allowed call is forwarded,
 with the conversation the client names in the call's `_meta` (`mcp-guard/conversation`) or
-else its MCP session. A call the log can't record is denied.
+else its MCP session. A call the log can't record is denied. Each new entry is also sent live
+to whoever watches `/events` (live.py), with the deny's explanation rebuilt from its reason.
+
+Every Tool call result, allowed or denied, carries the Decision in its `_meta`
+(`mcp-guard/decision`): decision, reason, explanation, layer, and `audit_id`, the number of
+its Audit entry (null if the log couldn't record it), so a step in the chat links to its entry.
 
 The MCP SDK traces every Tool call: a span for the call the Gateway receives, joined to the
 caller's trace through the request's `_meta`, and inside it a span for the call to the
@@ -50,10 +55,18 @@ from opentelemetry import trace
 from starlette.applications import Starlette
 from starlette.requests import Request
 
-from mcp_guard.gateway import audit, audit_api, login
-from mcp_guard.gateway.decisions import Allow, Decision, Deny
+from mcp_guard.gateway import audit, audit_api, live, login
+from mcp_guard.gateway.audit import Entry
+from mcp_guard.gateway.decisions import Allow, Decision, Deny, fields_of
 from mcp_guard.gateway.downstream import Downstream, connect
-from mcp_guard.gateway.permissions import Permissions, PolicyError, configured_policies_dir
+from mcp_guard.gateway.permissions import (
+    EXPLANATIONS,
+    LAYER,
+    LAYER_NAME,
+    Permissions,
+    PolicyError,
+    configured_policies_dir,
+)
 from mcp_guard.gateway.tokens import McpTokenVerifier, Person, Tokens, person_of, signing_key
 from mcp_guard.gateway.tracing import start_tracing, stop_tracing
 
@@ -61,6 +74,8 @@ ALLOWED_WITH_DEFENCES_OFF = Allow("defences_off")
 
 # Where a client names the conversation a Tool call belongs to, in the call's `_meta`.
 CONVERSATION_META_KEY = "mcp-guard/conversation"
+# Where the Gateway puts its Decision on a Tool call, in the result's `_meta`.
+DECISION_META_KEY = "mcp-guard/decision"
 
 
 @dataclass(frozen=True)
@@ -69,6 +84,7 @@ class Gateway:
 
     downstream: Downstream
     permissions: Permissions | None  # None with the defences off
+    feed: live.Feed
 
 
 async def list_tools(
@@ -86,15 +102,17 @@ async def call_tool(
     gateway = ctx.lifespan_context
     decision: Decision
     if not gateway.downstream.owns(params.name):
-        decision = Deny("gateway", "unknown_tool", f"No server has a tool called {params.name}.")
+        decision = _unknown_tool(params.name)
     elif gateway.permissions is None:
         decision = ALLOWED_WITH_DEFENCES_OFF
     else:
         decision = await gateway.permissions.decide(person, params.name, params.arguments)
+    entry_id: int | None = None
     try:
-        entry_id = await audit.record(
+        entry = await gateway.feed.record(
             person, _conversation(ctx, params), params.name, params.arguments, decision
         )
+        entry_id = entry.id
         span.set_attribute("gateway.audit.id", entry_id)
     except (psycopg.Error, OSError):
         # Fail closed: a call the Audit log can't record isn't made.
@@ -104,24 +122,39 @@ async def call_tool(
     span.set_attributes(_decision_attributes(decision))
     match decision:
         case Allow():
-            return await gateway.downstream.call_tool(params.name, params.arguments)
+            result = await gateway.downstream.call_tool(params.name, params.arguments)
         case Deny(reason=reason, explanation=explanation):
-            return CallToolResult(
+            result = CallToolResult(
                 content=[TextContent(text=f"Denied by the Gateway ({reason}): {explanation}")],
                 is_error=True,
             )
+    meta = {**(result.meta or {}), DECISION_META_KEY: _decision_meta(decision, entry_id)}
+    return result.model_copy(update={"meta": meta})
+
+
+def _unknown_tool(tool: str) -> Deny:
+    return Deny("gateway", "unknown_tool", f"No server has a tool called {tool}.")
+
+
+def _explain(entry: Entry) -> str | None:
+    """A logged deny's explanation, rebuilt from its reason code (the log doesn't keep it)."""
+    if entry.reason == "unknown_tool":
+        return _unknown_tool(entry.tool).explanation
+    return EXPLANATIONS.get(entry.reason) if entry.reason else None
+
+
+def _decision_meta(decision: Decision, entry_id: int | None) -> dict[str, object]:
+    """The Decision as the result's `_meta` carries it, with its Audit entry's number."""
+    return {**fields_of(decision), "audit_id": entry_id}
 
 
 def _decision_attributes(decision: Decision) -> dict[str, str]:
-    match decision:
-        case Allow(layer=layer):
-            return {"gateway.decision": "allow", "gateway.decision.layer": layer}
-        case Deny(layer=layer, reason=reason):
-            return {
-                "gateway.decision": "deny",
-                "gateway.decision.reason": reason,
-                "gateway.decision.layer": layer,
-            }
+    decided = fields_of(decision)
+    attributes = {"gateway.decision.reason": decided["reason"]} if decided["reason"] else {}
+    return attributes | {
+        "gateway.decision": str(decided["decision"]),
+        "gateway.decision.layer": str(decided["layer"]),
+    }
 
 
 def _conversation(ctx: ServerRequestContext[Gateway], params: CallToolRequestParams) -> str | None:
@@ -151,12 +184,15 @@ def app(tokens: Tokens, permissions: Permissions | None, host: str = "127.0.0.1"
 
     With `permissions` None, the defences are off.
     """
+    layers = [] if permissions is None else [live.Layer(LAYER, LAYER_NAME)]
+    feed = live.Feed(_explain)
 
     @asynccontextmanager
     async def lifespan(_: Server[Gateway]) -> AsyncGenerator[Gateway]:
         try:
             async with connect() as downstream:
-                yield Gateway(downstream, permissions)
+                feed.learn_servers(downstream.server_of)
+                yield Gateway(downstream, permissions, feed)
         finally:
             # uvicorn ends the process with the signal that stopped it, so exit hooks never run.
             stop_tracing()
@@ -180,11 +216,16 @@ def app(tokens: Tokens, permissions: Permissions | None, host: str = "127.0.0.1"
             }
         ),
         token_verifier=McpTokenVerifier(tokens),
-        custom_starlette_routes=[*login.routes(tokens), *audit_api.routes(tokens)],
+        custom_starlette_routes=[
+            *login.routes(tokens),
+            *audit_api.routes(tokens),
+            *live.routes(tokens, layers, feed),
+        ],
     )
 
 
 DEFENCES_SETTINGS = ("on", "off")
+SHUTDOWN_SECONDS = 3
 
 
 def main() -> None:
@@ -204,7 +245,8 @@ def main() -> None:
         sys.exit(f"Couldn't set up the Audit log in DATABASE_URL: {e}")
     start_tracing("mcp-guard-gateway")
     gateway = app(Tokens(key, f"http://{host}:{port}"), permissions, host)
-    uvicorn.run(gateway, host=host, port=port)
+    # Open /events streams never end by themselves, so shutdown doesn't wait for them long.
+    uvicorn.run(gateway, host=host, port=port, timeout_graceful_shutdown=SHUTDOWN_SECONDS)
 
 
 if __name__ == "__main__":

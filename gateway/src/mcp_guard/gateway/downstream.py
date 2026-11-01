@@ -32,7 +32,7 @@ class Downstream:
     """Open connections to the downstream servers, and which server owns each tool."""
 
     _servers: Sequence[Client]
-    _owners: Mapping[str, Client]
+    _owners: Mapping[str, tuple[str, Client]]  # each tool's server: its name and connection
 
     async def list_tools(self) -> list[Tool]:
         """Every server's tools as defined right now: a server may change a definition at
@@ -42,8 +42,13 @@ class Downstream:
     def owns(self, tool_name: str) -> bool:
         return tool_name in self._owners
 
+    def server_of(self, tool_name: str) -> str | None:
+        """The name of the server that owns the tool, e.g. "accounts"; None if none does."""
+        owner = self._owners.get(tool_name)
+        return owner[0] if owner else None
+
     async def call_tool(self, name: str, arguments: dict[str, object] | None) -> CallToolResult:
-        return await self._owners[name].call_tool(name, arguments)
+        return await self._owners[name][1].call_tool(name, arguments)
 
 
 @asynccontextmanager
@@ -54,7 +59,7 @@ async def connect() -> AsyncGenerator[Downstream]:
     """
     environment = {name: os.environ[name] for name in PASSED_ENVIRONMENT if name in os.environ}
     servers: list[Client] = []
-    owners: dict[str, Client] = {}
+    owners: dict[str, tuple[str, Client]] = {}
     async with AsyncExitStack() as stack:
         for name, args in SERVERS.items():
             params = StdioServerParameters(command=sys.executable, args=args, env=environment)
@@ -64,7 +69,7 @@ async def connect() -> AsyncGenerator[Downstream]:
             for tool in await _all_tools(client):
                 if tool.name in owners:
                     raise ValueError(f"Tool {tool.name!r} from {name!r} is already defined")
-                owners[tool.name] = client
+                owners[tool.name] = (name, client)
         yield Downstream(servers, owners)
 
 

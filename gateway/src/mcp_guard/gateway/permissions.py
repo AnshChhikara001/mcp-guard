@@ -29,6 +29,7 @@ from mcp_guard.gateway.tokens import Person
 
 POLICIES_DIR = Path(__file__).parents[3] / "policies"
 LAYER = "cedar"
+LAYER_NAME = "Permissions"
 
 NOT_YOURS = Deny(
     LAYER,
@@ -46,6 +47,10 @@ NOT_PERMITTED = Deny(
     LAYER, "not_permitted", "The person you work for may not use this tool in their role."
 )
 NO_RULE = Deny(LAYER, "no_rule", "No policy allows this tool, so the Gateway blocks it.")
+# Each reason code's explanation: the log stores the code, and the explanation is rebuilt.
+EXPLANATIONS: Mapping[str, str] = {
+    d.reason: d.explanation for d in (NOT_YOURS, RECIPIENT_NOT_ALLOWED, NOT_PERMITTED, NO_RULE)
+}
 
 type _Entity = dict[str, Any]  # an entity in Cedar's JSON form
 type _Finder = Callable[[Mapping[str, object]], Awaitable[list[_Entity] | None]]
