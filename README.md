@@ -26,6 +26,7 @@ make db                # local Postgres on localhost:5432
 make reset-bank        # load the seeded fake bank into Postgres (also restores it later)
 make gateway           # the Gateway at http://127.0.0.1:8000/mcp, with the fake bank servers behind it
 make chat              # in a second terminal: log in and chat with the Agent as C001 (PERSON=S003, CONVERSATION=)
+make agent-api         # or: the Agent API the web app chats through, at http://127.0.0.1:8001
 make eval              # the Red-team eval with the scripted fake model (MODEL=, DEFENCES=, ONLY=, LIMIT=, PRICE=)
 make check             # ruff, pyright (strict) and pytest, as CI runs them; tests need make db
 ```
@@ -102,7 +103,7 @@ The model sits behind one small interface ([`model.py`](agent/src/mcp_guard/agen
 
 | `MODEL` | Model | Needs |
 | --- | --- | --- |
-| _(unset)_ | a scripted fake ([`fake_model.py`](agent/src/mcp_guard/agent/fake_model.py)) that answers balance questions the way a real model would | nothing |
+| _(unset)_ | a scripted fake ([`fake_model.py`](agent/src/mcp_guard/agent/fake_model.py)) that answers the web app's suggested questions (a balance, someone else's balance, recent transactions, a currency conversion) the way a real model would | nothing |
 | `gemini:<model>`, e.g. `gemini:gemini-3.5-flash` | Gemini | `GEMINI_API_KEY` |
 | `openai:<model>`, e.g. `openai:gpt-5-mini` | OpenAI | `OPENAI_API_KEY` |
 | `<provider>:<model>` | a provider from the Python file named by `MODEL_ADAPTERS_FILE` | whatever that file needs |
@@ -124,7 +125,9 @@ class LocalModel:
 ADAPTERS = {"local": LocalModel}
 ```
 
-The Seam 2 tests in `agent/tests/` drive whole conversations with the fake model through the real Gateway, including the terminal chat as its own process, and check the Gemini and OpenAI adapters against a fake provider API on a local port (no API key, no cost).
+The Agent API ([`api.py`](agent/src/mcp_guard/agent/api.py), `make agent-api`) serves the same Agent over HTTP for the web app. The browser logs in at the Gateway and sends its MCP token; the API checks it against the Gateway's public key and uses it for that person's Tool calls. `POST /conversations` opens a conversation the person owns, and `POST /conversations/{id}/turns` with `{"text": ...}` streams the turn as Server-Sent Events: each `tool_call`, the Gateway's `decision` on it, then the `reply` with its tokens and, with `MODEL_PRICE=<input>,<output>` (dollars per million tokens), its estimated cost, or an `error` if the model failed. Someone else's conversation gets 403, and a second turn while one runs gets 409.
+
+The Seam 2 tests in `agent/tests/` drive whole conversations with the fake model through the real Gateway, including the terminal chat and the Agent API as their own processes, and check the Gemini and OpenAI adapters against a fake provider API on a local port (no API key, no cost).
 
 ## Red-team eval
 

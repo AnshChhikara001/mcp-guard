@@ -10,7 +10,7 @@ from mcp.types import Tool
 
 from conftest import RunningGateway, WritableBank
 from mcp_guard.agent.agent import Agent, start_agent
-from mcp_guard.agent.fake_model import ScriptedModel, balance_script
+from mcp_guard.agent.fake_model import ScriptedModel, demo_script
 from mcp_guard.agent.gateway import login
 from mcp_guard.agent.model import Model
 from mcp_guard.fake_servers.fx_rates import INJECTED_INSTRUCTIONS
@@ -38,7 +38,7 @@ async def agent_for(
 async def test_customer_gets_their_balance_through_the_gateway(
     gateway: RunningGateway, database_url: str
 ) -> None:
-    model = ScriptedModel(balance_script("C001"))
+    model = ScriptedModel(demo_script("C001"))
     async with agent_for(model, gateway, database_url) as agent:
         reply = await agent.ask("conversation-1", "What's my balance?")
 
@@ -48,7 +48,7 @@ async def test_customer_gets_their_balance_through_the_gateway(
 async def test_follow_up_is_answered_from_an_earlier_turn(
     gateway: RunningGateway, database_url: str
 ) -> None:
-    model = ScriptedModel(balance_script("C001"))
+    model = ScriptedModel(demo_script("C001"))
     async with agent_for(model, gateway, database_url) as agent:
         await agent.ask("conversation-1", "What's my balance?")
         reply = await agent.ask("conversation-1", "What was that in paise?")
@@ -59,7 +59,7 @@ async def test_follow_up_is_answered_from_an_earlier_turn(
 async def test_conversations_do_not_share_memory(
     gateway: RunningGateway, database_url: str
 ) -> None:
-    model = ScriptedModel(balance_script("C001"))
+    model = ScriptedModel(demo_script("C001"))
     async with agent_for(model, gateway, database_url) as agent:
         await agent.ask("conversation-1", "What's my balance?")
         reply = await agent.ask("conversation-2", "What was that in paise?")
@@ -71,10 +71,10 @@ async def test_conversations_do_not_share_memory(
 async def test_conversation_memory_survives_restarting_the_agent(
     gateway: RunningGateway, database_url: str
 ) -> None:
-    async with agent_for(ScriptedModel(balance_script("C001")), gateway, database_url) as agent:
+    async with agent_for(ScriptedModel(demo_script("C001")), gateway, database_url) as agent:
         await agent.ask("conversation-1", "What's my balance?")
 
-    async with agent_for(ScriptedModel(balance_script("C001")), gateway, database_url) as restarted:
+    async with agent_for(ScriptedModel(demo_script("C001")), gateway, database_url) as restarted:
         reply = await restarted.ask("conversation-1", "What was that in paise?")
 
     assert "19484400 paise" in reply
@@ -132,7 +132,7 @@ async def test_a_tool_definition_changed_mid_conversation_reaches_the_model(
 async def test_every_tool_call_names_its_conversation_in_the_audit_log(
     gateway: RunningGateway, database_url: str
 ) -> None:
-    async with agent_for(ScriptedModel(balance_script("C001")), gateway, database_url) as agent:
+    async with agent_for(ScriptedModel(demo_script("C001")), gateway, database_url) as agent:
         await agent.ask("conversation-audited", "What's my balance?")
 
     supervisor = httpx.post(f"{gateway.base_url}/demo/login", json={"person": "S004"}).json()

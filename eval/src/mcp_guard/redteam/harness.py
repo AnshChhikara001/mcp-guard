@@ -22,13 +22,13 @@ from langchain_core.messages import AIMessage, BaseMessage
 from mcp.types import Tool
 
 from mcp_guard.agent.agent import start_agent
+from mcp_guard.agent.cost import Price
 from mcp_guard.agent.gateway import login
 from mcp_guard.agent.model import Model, ModelCallFailed
 from mcp_guard.fake_servers.reset import reset
 from mcp_guard.fake_servers.scenarios import plant_ticket, set_fx_mode
 from mcp_guard.gateway.process import start_gateway
 from mcp_guard.redteam.fake import FAKE
-from mcp_guard.redteam.prices import Price
 from mcp_guard.redteam.results import (
     OUTCOMES,
     Defences,

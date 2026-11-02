@@ -1,7 +1,8 @@
 """How a person reaches the Gateway: logging in, and an MCP client that carries their token.
 
 The caller logs in and gives the Agent only the person and their MCP token, which it sends as
-`Authorization: Bearer` on every request to the Gateway; it never reads what is inside. The
+`Authorization: Bearer` on every request to the Gateway; it never reads what is inside (the
+Agent API checks a token's signature before it uses one, see api.py). The
 login reply's UI token is dropped here: only the chat UI holds one (ADR-0005).
 """
 

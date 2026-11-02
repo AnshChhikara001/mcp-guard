@@ -8,6 +8,9 @@ providers come from a Python file outside the repository that defines
     ADAPTERS = {"local": make_local_model}
 
 where `make_local_model("some-model")` returns any object with the Model interface.
+
+`configured_model` picks the model the MODEL environment variable names (and
+MODEL_ADAPTERS_FILE), or else the scripted fake model, for the chats and the Agent API.
 """
 
 import importlib.util
@@ -29,6 +32,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from mcp.types import Tool
 
+from mcp_guard.agent.fake_model import ScriptedModel, demo_script
 from mcp_guard.agent.model import Model, ModelCallFailed
 
 type ModelFactory = Callable[[str], Model]
@@ -148,3 +152,11 @@ def _as_provider_tool(tool: Tool) -> dict[str, Any]:
 def _timeout_seconds() -> float:
     """How long one request to the model may take: MODEL_TIMEOUT_SECONDS, or a minute."""
     return float(os.environ.get("MODEL_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
+
+
+def configured_model(person_id: str) -> tuple[str | None, Model]:
+    """The model MODEL names, with that name; without MODEL, the scripted fake model working
+    for `person_id`, named None."""
+    if name := os.environ.get("MODEL"):
+        return name, load_model(name, os.environ.get("MODEL_ADAPTERS_FILE"))
+    return None, ScriptedModel(demo_script(person_id))

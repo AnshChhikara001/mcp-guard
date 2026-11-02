@@ -19,11 +19,10 @@ import uuid
 import anyio
 import anyio.to_thread
 
-from mcp_guard.agent.adapters import load_model
+from mcp_guard.agent.adapters import configured_model
 from mcp_guard.agent.agent import start_agent
-from mcp_guard.agent.fake_model import ScriptedModel, balance_script
 from mcp_guard.agent.gateway import LoginRefused, login
-from mcp_guard.agent.model import Model, ModelCallFailed
+from mcp_guard.agent.model import ModelCallFailed
 from mcp_guard.agent.tracing import start_tracing
 
 LOCAL_GATEWAY_URL = "http://127.0.0.1:8000/mcp"
@@ -35,7 +34,7 @@ async def chat(person_id: str, conversation_id: str) -> None:
     database_url = os.environ.get("DATABASE_URL", LOCAL_DATABASE_URL)
     logged_in = await login(gateway_url, person_id)
     person = logged_in.person
-    model_name, model = _configured_model(person.id)
+    model_name, model = configured_model(person.id)
     async with start_agent(
         model,
         gateway_url,
@@ -59,13 +58,6 @@ async def chat(person_id: str, conversation_id: str) -> None:
                     print(f"agent> {await agent.ask(conversation_id, text)}")
                 except ModelCallFailed as e:
                     print(f"error> {e}")
-
-
-def _configured_model(person_id: str) -> tuple[str | None, Model]:
-    """The model MODEL names, with that name; None names the scripted fake."""
-    if name := os.environ.get("MODEL"):
-        return name, load_model(name, os.environ.get("MODEL_ADAPTERS_FILE"))
-    return None, ScriptedModel(balance_script(person_id))
 
 
 def main() -> None:

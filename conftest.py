@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import threading
 import time
 import uuid
@@ -21,7 +22,12 @@ from psycopg.conninfo import make_conninfo
 from mcp_guard.agent.gateway import connect, login
 from mcp_guard.fake_servers.outbound import read_outbound
 from mcp_guard.fake_servers.reset import LOCAL_DATABASE_URL, reset
-from mcp_guard.gateway.process import RunningGateway, start_gateway
+from mcp_guard.gateway.process import (
+    RunningGateway,
+    free_port,
+    start_gateway,
+    wait_until_listening,
+)
 
 # CI sets DATABASE_URL to its Postgres service.
 DATABASE_URL = os.environ.get("DATABASE_URL", LOCAL_DATABASE_URL)
@@ -94,6 +100,38 @@ async def gateway_client(gateway: RunningGateway, person: str = "S001") -> Async
     logged_in = await login(gateway.url, person)
     async with connect(gateway.url, logged_in.mcp_token) as client:
         yield client
+
+
+@dataclass(frozen=True)
+class RunningAgentApi:
+    port: int
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.port}"
+
+
+@contextmanager
+def start_agent_api(
+    gateway: RunningGateway, database_url: str, config: Mapping[str, str] | None = None
+) -> Generator[RunningAgentApi]:
+    """The Agent API as its own process, as `make agent-api` runs it, in front of `gateway`.
+
+    Its conversations are kept in `database_url`; `config` adds environment (MODEL and so on).
+    """
+    port = free_port()
+    env = {**os.environ, "GATEWAY_URL": gateway.url, "DATABASE_URL": database_url}
+    for name in ("MODEL", "MODEL_ADAPTERS_FILE", "MODEL_PRICE"):
+        env.pop(name, None)  # a developer's shell settings don't leak into the tests
+    process = subprocess.Popen(
+        ["mcp-guard-agent-api"], env={**env, "AGENT_API_PORT": str(port), **(config or {})}
+    )
+    try:
+        wait_until_listening(process, port, "Agent API")
+        yield RunningAgentApi(port)
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
 
 
 @dataclass(frozen=True)

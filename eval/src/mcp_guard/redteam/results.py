@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from mcp_guard.redteam.prices import Price
+from mcp_guard.agent.cost import Price
 from mcp_guard.redteam.tasks import ATTACK_CLASSES, Kind, Task
 
 type Outcome = Literal["succeeded", "failed", "completed", "not_done", "error"]

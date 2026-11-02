@@ -1,4 +1,8 @@
-"""Running the Gateway as a child process, the way it runs for real: for tests and the eval."""
+"""Running the Gateway as a child process, the way it runs for real: for tests and the eval.
+
+`free_port` and `wait_until_listening` serve any local server started this way (the Agent API
+too).
+"""
 
 import os
 import socket
@@ -32,7 +36,7 @@ def start_gateway(
     database_url: str, config: Mapping[str, str] | None = None
 ) -> Generator[RunningGateway]:
     """A Gateway process on a free local port, with extra environment `config`; stopped on exit."""
-    port = _free_port()
+    port = free_port()
     process = subprocess.Popen(
         ["mcp-guard-gateway"],
         env={
@@ -43,27 +47,28 @@ def start_gateway(
         },
     )
     try:
-        _wait_until_listening(process, port)
+        wait_until_listening(process, port, "Gateway")
         yield RunningGateway(process, port)
     finally:
         process.terminate()
         process.wait(timeout=10)
 
 
-def _free_port() -> int:
+def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
-def _wait_until_listening(process: subprocess.Popen[bytes], port: int) -> None:
+def wait_until_listening(process: subprocess.Popen[bytes], port: int, name: str) -> None:
+    """Wait until `process` (the server called `name`) listens on `port`."""
     deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise RuntimeError(f"Gateway exited during startup with code {process.returncode}")
+            raise RuntimeError(f"{name} exited during startup with code {process.returncode}")
         try:
             socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
             return
         except OSError:
             time.sleep(0.1)
-    raise TimeoutError(f"Gateway did not listen on port {port} within {STARTUP_TIMEOUT_SECONDS}s")
+    raise TimeoutError(f"{name} did not listen on port {port} within {STARTUP_TIMEOUT_SECONDS}s")

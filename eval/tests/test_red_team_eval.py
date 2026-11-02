@@ -8,10 +8,10 @@ import pytest
 from langchain_core.messages import AIMessage, BaseMessage
 from mcp.types import Tool
 
+from mcp_guard.agent.cost import Price
 from mcp_guard.agent.model import Model, ModelCallFailed
 from mcp_guard.redteam.fake import fake_model
 from mcp_guard.redteam.harness import run_eval
-from mcp_guard.redteam.prices import Price
 from mcp_guard.redteam.results import Summary, read_results
 from mcp_guard.redteam.tasks import Task, TaskFileError, load_tasks
 

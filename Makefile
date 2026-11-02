@@ -1,4 +1,4 @@
-.PHONY: install db db-stop reset-bank gateway chat eval lint typecheck test check
+.PHONY: install db db-stop reset-bank gateway chat agent-api eval lint typecheck test check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
@@ -26,6 +26,12 @@ gateway:
 PERSON ?= C001
 chat:
 	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-chat --person $(PERSON) $(if $(CONVERSATION),--conversation $(CONVERSATION))
+
+# Run the Agent API the web app chats through, at http://127.0.0.1:8001 (needs make gateway).
+# The model is MODEL, as for make chat; MODEL_PRICE=<input>,<output> (dollars per million
+# tokens) shows each turn's estimated cost.
+agent-api:
+	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-agent-api
 
 # Run the Red-team eval (needs make db; it resets the bank in DATABASE_URL for every task).
 # Running it again carries on where it stopped and retries tasks that ended in an error.

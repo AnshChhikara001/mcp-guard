@@ -18,12 +18,13 @@ from pathlib import Path
 import anyio
 
 from mcp_guard.agent.adapters import load_model
+from mcp_guard.agent.cost import Price
 from mcp_guard.agent.model import Model
 from mcp_guard.agent.tracing import start_tracing
 from mcp_guard.fake_servers.reset import LOCAL_DATABASE_URL
 from mcp_guard.redteam.fake import FAKE, fake_model
 from mcp_guard.redteam.harness import run_eval
-from mcp_guard.redteam.prices import PRICES, Price
+from mcp_guard.redteam.prices import PRICES
 from mcp_guard.redteam.results import DEFENCES, Defences, ItemResult
 from mcp_guard.redteam.tasks import ATTACK_CLASSES, Task, load_tasks
 
