@@ -89,8 +89,9 @@ def demo_script(person_id: str) -> Script:
     return script
 
 
-CUSTOMER_ID = re.compile(r"\bC\d{3}\b", re.IGNORECASE)
-ACCOUNT_ID = re.compile(r"\bA\d{3}\b", re.IGNORECASE)
+# An ID may run straight on into a word ("C002s balance").
+CUSTOMER_ID = re.compile(r"\bC\d{3}(?!\d)", re.IGNORECASE)
+ACCOUNT_ID = re.compile(r"\bA\d{3}(?!\d)", re.IGNORECASE)
 AMOUNT = re.compile(r"\d[\d,]*(?:\.\d+)?")
 # How each currency may be named, by its code.
 CURRENCY_NAMES = {

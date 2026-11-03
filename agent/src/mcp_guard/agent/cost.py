@@ -2,7 +2,9 @@
 
 The rule is the same for every model family: input tokens at the provider's list input price
 plus output tokens at its list output price, in US dollars, with no caching or batch discounts.
-The Red-team eval and the Agent API price tokens the same way.
+The Red-team eval and the Agent API price tokens the same way, from the same list.
+Prices change; each is dated. A model not listed here can have its price listed beside its
+adapter (see adapters.py), or set when it runs.
 """
 
 import math
@@ -34,3 +36,12 @@ class Price(BaseModel):
                 f" not {setting!r}"
             ) from e
         return cls(input_per_million=input_price, output_per_million=output_price)
+
+
+FREE = Price(input_per_million=0, output_per_million=0)
+
+# Checked 2026-10-25, standard paid tier, text.
+LISTED_PRICES: dict[str, Price] = {
+    "gemini:gemini-3.5-flash": Price(input_per_million=1.50, output_per_million=9.00),
+    "openai:gpt-5-mini": Price(input_per_million=0.25, output_per_million=2.00),
+}

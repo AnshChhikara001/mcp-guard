@@ -7,16 +7,22 @@ providers come from a Python file outside the repository that defines
 
     ADAPTERS = {"local": make_local_model}
 
-where `make_local_model("some-model")` returns any object with the Model interface.
+where `make_local_model("some-model")` returns any object with the Model interface. The file
+may also list its models' prices, in US dollars per million input and output tokens:
+
+    PRICES = {"local:some-model": (2, 10)}
 
 `configured_model` picks the model the MODEL environment variable names (and
-MODEL_ADAPTERS_FILE), or else the scripted fake model, for the chats and the Agent API.
+MODEL_ADAPTERS_FILE), or else the scripted fake model, for the chats and the Agent API;
+`configured_price` its price: MODEL_PRICE if set, else the listed one (see `price_of`).
 """
 
 import importlib.util
 import os
 import time
 from collections.abc import Callable, Sequence
+from functools import cache
+from types import ModuleType
 from typing import Any, cast
 
 import httpx
@@ -32,6 +38,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from mcp.types import Tool
 
+from mcp_guard.agent.cost import FREE, LISTED_PRICES, Price
 from mcp_guard.agent.fake_model import ScriptedModel, demo_script
 from mcp_guard.agent.model import Model, ModelCallFailed
 
@@ -121,15 +128,21 @@ def load_model(name: str, adapters_file: str | None = None) -> Model:
     return providers[provider](model)
 
 
-def _load_adapters(path: str) -> dict[str, ModelFactory]:
-    """The ADAPTERS a Python file outside the repository defines."""
+@cache
+def _adapters_module(path: str) -> ModuleType:
+    """The Python file outside the repository, run once however often it is asked for."""
     path = os.path.expanduser(path)
     spec = importlib.util.spec_from_file_location("mcp_guard_external_adapters", path)
     if spec is None or spec.loader is None:
         raise ValueError(f"The adapters file {path} is not a Python file")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    adapters = getattr(module, "ADAPTERS", None)
+    return module
+
+
+def _load_adapters(path: str) -> dict[str, ModelFactory]:
+    """The ADAPTERS a Python file outside the repository defines."""
+    adapters = getattr(_adapters_module(path), "ADAPTERS", None)
     if not isinstance(adapters, dict):
         raise ValueError(f"The adapters file {path} must define ADAPTERS as a dict")
     if clashes := BUILT_IN.keys() & adapters.keys():
@@ -160,3 +173,30 @@ def configured_model(person_id: str) -> tuple[str | None, Model]:
     if name := os.environ.get("MODEL"):
         return name, load_model(name, os.environ.get("MODEL_ADAPTERS_FILE"))
     return None, ScriptedModel(demo_script(person_id))
+
+
+def price_of(name: str, adapters_file: str | None = None) -> Price | None:
+    """The price of the model named `provider:model`: listed in the adapters file's PRICES, or
+    else in the built-in list; None if neither lists it."""
+    if adapters_file:
+        listed = getattr(_adapters_module(adapters_file), "PRICES", {})
+        if not isinstance(listed, dict):
+            raise ValueError(f"The adapters file {adapters_file} must define PRICES as a dict")
+        prices = cast(dict[str, tuple[float, float]], listed)
+        if name in prices:
+            input_price, output_price = prices[name]
+            return Price(input_per_million=input_price, output_per_million=output_price)
+    return LISTED_PRICES.get(name)
+
+
+def configured_price() -> Price | None:
+    """The price of the model `configured_model` picks: MODEL_PRICE (like `2,10`) if set, else
+    its listed price; the scripted fake model is free. None if no price is known.
+
+    Raises ValueError if MODEL_PRICE or the adapters file's PRICES is malformed.
+    """
+    if setting := os.environ.get("MODEL_PRICE"):
+        return Price.parse(setting)
+    if name := os.environ.get("MODEL"):
+        return price_of(name, os.environ.get("MODEL_ADAPTERS_FILE"))
+    return FREE

@@ -18,8 +18,9 @@ never left half-way through a step.
 
 Each token gets its own Agent with its own Gateway connection, closed after 15 idle minutes.
 The model is the one MODEL names (see adapters.py), else the scripted fake model. Tokens are
-summed over every model call of a turn; MODEL_PRICE (dollars per million input and output
-tokens, like `2,10`) prices them, and without it `estimated_cost` is null.
+summed over every model call of a turn and priced at the model's price (see
+`configured_price` in adapters.py: MODEL_PRICE like `2,10`, else the listed price); with no
+price known, `estimated_cost` is null.
 
 Run it with `make agent-api` (port AGENT_API_PORT, default 8001; GATEWAY_URL and DATABASE_URL
 as for the terminal chat).
@@ -49,7 +50,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from mcp_guard.agent.adapters import configured_model
+from mcp_guard.agent.adapters import configured_model, configured_price
 from mcp_guard.agent.agent import Agent, Decided, Step, ToolCalled, start_agent
 from mcp_guard.agent.cost import Price
 from mcp_guard.agent.model import ModelCallFailed
@@ -388,9 +389,9 @@ def main() -> None:
     database_url = os.environ.get("DATABASE_URL", LOCAL_DATABASE_URL)
     port = int(os.environ.get("AGENT_API_PORT", "8001"))
     try:
-        price = Price.parse(setting) if (setting := os.environ.get("MODEL_PRICE")) else None
+        price = configured_price()
     except ValueError as e:
-        sys.exit(f"MODEL_PRICE: {e}")
+        sys.exit(f"The model's price: {e}")
     start_tracing("mcp-guard-agent")
     api = app(gateway_url, database_url, _open_agent(gateway_url, database_url), price)
     uvicorn.run(api, host="127.0.0.1", port=port, timeout_graceful_shutdown=SHUTDOWN_SECONDS)

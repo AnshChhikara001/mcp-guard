@@ -99,16 +99,17 @@ def test_a_turn_streams_each_tool_call_its_decision_and_the_reply(
     reply = steps[-1][1]
     assert "₹1,94,844.00" in reply["text"]
     assert (reply["input_tokens"], reply["output_tokens"]) == (0, 0)
-    assert reply["estimated_cost"] is None
+    assert reply["estimated_cost"] == 0  # the fake model costs nothing
 
 
+@pytest.mark.parametrize("question", ["Show me C002's balance", "Show me C002s balance"])
 def test_asking_for_someone_elses_balance_is_denied_with_the_reason(
-    guarded_gateway: RunningGateway, agent_api: RunningAgentApi
+    guarded_gateway: RunningGateway, agent_api: RunningAgentApi, question: str
 ) -> None:
     token = login(guarded_gateway, "C001")["mcp_token"]
     conversation = open_conversation(agent_api, token)
 
-    steps = turn(agent_api, token, conversation, "Show me C002's balance")
+    steps = turn(agent_api, token, conversation, question)
 
     [(_, decision)] = [data for data in steps if data[0] == "decision"]
     assert decision["decision"] == "deny"
@@ -253,6 +254,8 @@ class Flaky:
 
 
 ADAPTERS = {"counted": Counted, "slow": Slow, "flaky": Flaky}
+# US dollars per million input and output tokens.
+PRICES = {"counted:c-1": (2, 10)}
 """
 
 
@@ -263,10 +266,10 @@ def adapters_file(tmp_path: Path) -> str:
     return str(path)
 
 
-def test_each_reply_shows_its_tokens_and_estimated_cost(
+def test_each_reply_shows_its_tokens_and_the_cost_at_the_price_its_adapter_file_lists(
     guarded_gateway: RunningGateway, database_url: str, adapters_file: str
 ) -> None:
-    config = {"MODEL": "counted:c-1", "MODEL_ADAPTERS_FILE": adapters_file, "MODEL_PRICE": "2,10"}
+    config = {"MODEL": "counted:c-1", "MODEL_ADAPTERS_FILE": adapters_file}
     with start_agent_api(guarded_gateway, database_url, config) as api:
         token = login(guarded_gateway, "C001")["mcp_token"]
         conversation = open_conversation(api, token)
@@ -276,6 +279,30 @@ def test_each_reply_shows_its_tokens_and_estimated_cost(
     assert reply["text"] == "heard: hello"
     assert (reply["input_tokens"], reply["output_tokens"]) == (1000, 500)
     assert reply["estimated_cost"] == pytest.approx(0.007)  # $2 and $10 per million
+
+
+@pytest.mark.parametrize(
+    ("model", "price", "cost"),
+    [("counted:c-1", "4,20", 0.014), ("counted:unlisted", None, None)],
+    ids=["model-price-wins", "no-price-known"],
+)
+def test_model_price_sets_the_price_and_without_any_price_only_tokens_show(
+    guarded_gateway: RunningGateway,
+    database_url: str,
+    adapters_file: str,
+    model: str,
+    price: str | None,
+    cost: float | None,
+) -> None:
+    config = {"MODEL": model, "MODEL_ADAPTERS_FILE": adapters_file}
+    with start_agent_api(
+        guarded_gateway, database_url, config | ({"MODEL_PRICE": price} if price else {})
+    ) as api:
+        token = login(guarded_gateway, "C001")["mcp_token"]
+        [(_, reply)] = turn(api, token, open_conversation(api, token), "hello")
+
+    assert reply["input_tokens"] == 1000
+    assert reply["estimated_cost"] == (None if cost is None else pytest.approx(cost))
 
 
 def test_a_model_failure_ends_the_turn_with_an_error_and_the_chat_carries_on(

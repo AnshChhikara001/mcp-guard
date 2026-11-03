@@ -17,7 +17,7 @@ from pathlib import Path
 
 import anyio
 
-from mcp_guard.agent.adapters import load_model
+from mcp_guard.agent.adapters import load_model, price_of
 from mcp_guard.agent.cost import Price
 from mcp_guard.agent.model import Model
 from mcp_guard.agent.tracing import start_tracing
@@ -51,7 +51,8 @@ def main() -> None:
         nargs=2,
         type=float,
         metavar=("INPUT", "OUTPUT"),
-        help="US dollars per million input and output tokens, for a model with no listed price",
+        help="US dollars per million input and output tokens, for a model with no listed price"
+        " (built in, or in the adapters file's PRICES)",
     )
     parser.add_argument("--tasks", type=Path, default=Path("eval/tasks"), help="the tasks folder")
     parser.add_argument("--results", type=Path, help="the run's results folder")
@@ -62,7 +63,7 @@ def main() -> None:
     price = (
         Price(input_per_million=args.price[0], output_per_million=args.price[1])
         if args.price
-        else PRICES.get(args.model)
+        else PRICES.get(args.model) or price_of(args.model, os.environ.get("MODEL_ADAPTERS_FILE"))
     )
     if price is None:
         parser.error(f"There is no listed price for {args.model}; pass --price INPUT OUTPUT")
