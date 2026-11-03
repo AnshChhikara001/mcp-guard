@@ -14,21 +14,23 @@ Work in progress. Design decisions are in [`docs/adr/`](docs/adr/) and the proje
 | `agent/` | `mcp_guard.agent` | The demo Agent |
 | `fake_servers/` | `mcp_guard.fake_servers` | The six fake bank MCP servers |
 | `eval/` | `mcp_guard.redteam` | The Red-team eval |
+| `web/` | (npm) | The web app: chat with the Agent and watch the Gateway decide |
 
 ## Development
 
-Needs [uv](https://docs.astral.sh/uv/) and Docker.
+Needs [uv](https://docs.astral.sh/uv/), Node.js 24 and Docker.
 
 ```sh
 cp .env.example .env   # optional; the defaults work locally
-make install           # Python 3.13, all packages and dev tools, from uv.lock
+make install           # Python 3.13, all packages and dev tools, from uv.lock; the web app's from package-lock.json
 make db                # local Postgres on localhost:5432
 make reset-bank        # load the seeded fake bank into Postgres (also restores it later)
 make gateway           # the Gateway at http://127.0.0.1:8000/mcp, with the fake bank servers behind it
 make chat              # in a second terminal: log in and chat with the Agent as C001 (PERSON=S003, CONVERSATION=)
 make agent-api         # or: the Agent API the web app chats through, at http://127.0.0.1:8001
+make web               # and then: the web app at http://localhost:5173 (needs make gateway and make agent-api)
 make eval              # the Red-team eval with the scripted fake model (MODEL=, DEFENCES=, ONLY=, LIMIT=, PRICE=)
-make check             # ruff, pyright (strict) and pytest, as CI runs them; tests need make db
+make check             # ruff, pyright (strict), pytest, tsc and vitest, as CI runs them; tests need make db
 ```
 
 ## Seeded fake bank
@@ -125,7 +127,13 @@ class LocalModel:
 ADAPTERS = {"local": LocalModel}
 ```
 
-The Agent API ([`api.py`](agent/src/mcp_guard/agent/api.py), `make agent-api`) serves the same Agent over HTTP for the web app. The browser logs in at the Gateway and sends its MCP token; the API checks it against the Gateway's public key and uses it for that person's Tool calls. `POST /conversations` opens a conversation the person owns, and `POST /conversations/{id}/turns` with `{"text": ...}` streams the turn as Server-Sent Events: each `tool_call`, the Gateway's `decision` on it, then the `reply` with its tokens and, its estimated cost at the model's listed price (built in, or `PRICES = {"local:my-model": (2, 10)}` in the adapters file; `MODEL_PRICE=<input>,<output>` overrides it), or an `error` if the model failed. Someone else's conversation gets 403, and a second turn while one runs gets 409.
+The Agent API ([`api.py`](agent/src/mcp_guard/agent/api.py), `make agent-api`) serves the same Agent over HTTP for the web app. The browser logs in at the Gateway and sends its MCP token; the API checks it against the Gateway's public key and uses it for that person's Tool calls. `POST /conversations` opens a conversation the person owns, and `POST /conversations/{id}/turns` with `{"text": ...}` streams the turn as Server-Sent Events: each `tool_call`, the Gateway's `decision` on it, then the `reply` with its tokens and, its estimated cost at the model's listed price (built in, or `PRICES = {"local:my-model": (2, 10)}` in the adapters file; `MODEL_PRICE=<input>,<output>` overrides it), or an `error` if the model failed. Someone else's conversation gets 403, and a second turn while one runs gets 409. The web app adds `"suggested": true` when the person clicked a suggested prompt; the API ignores it for now (#33 uses it).
+
+## Web app
+
+`web/` (Vite, React, TypeScript, Tailwind; `make web`) is where a visitor chats with the Agent. Pick a role (Customer C001, Staff S001, Supervisor S004) and the app logs in at the Gateway, opens a conversation at the Agent API, and shows each Tool call as one plain sentence ("The Agent asks to list the accounts of C002. Blocked by Permissions.") with the Gateway's explanation; click it for the arguments, reason, check and Audit entry. Each turn shows its tokens and estimated cost, and the top bar the conversation's total. Switching role or reloading starts a new conversation; an expired token is renewed silently and the same conversation carries on. In development Vite passes `/gateway/*` to the Gateway and `/agent/*` to the Agent API, so the browser talks to one origin.
+
+The suggested prompts for each role are in [`suggested-prompts.json`](web/src/suggested-prompts.json), each with what the Gateway does with it; a test in `agent/tests/test_agent_api.py` sends every one through the real Gateway and Agent API with the fake model and checks that promise. The colours, fonts and spacing are the design tokens in [`index.css`](web/src/index.css), taken from the agreed prototype.
 
 The Seam 2 tests in `agent/tests/` drive whole conversations with the fake model through the real Gateway, including the terminal chat and the Agent API as their own processes, and check the Gemini and OpenAI adapters against a fake provider API on a local port (no API key, no cost).
 

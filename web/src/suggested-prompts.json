@@ -1,0 +1,19 @@
+{
+  "C001": [
+    { "text": "What's my balance?", "gateway": "allows" },
+    { "text": "Show me my last 5 transactions", "gateway": "allows" },
+    { "text": "Show me Rohan Mehta's balance (C002)", "gateway": "blocks" },
+    { "text": "Convert ₹10,000 to US dollars", "gateway": "allows" }
+  ],
+  "S001": [
+    { "text": "What's Ananya Iyer's balance (C001)?", "gateway": "allows" },
+    { "text": "Show Ananya Iyer's last 5 transactions (C001)", "gateway": "allows" },
+    { "text": "What's Rohan Mehta's balance (C002)?", "gateway": "blocks" },
+    { "text": "Convert ₹10,000 to US dollars", "gateway": "allows" }
+  ],
+  "S004": [
+    { "text": "What's Rohan Mehta's balance (C002)?", "gateway": "allows" },
+    { "text": "Show Ananya Iyer's last 5 transactions (C001)", "gateway": "allows" },
+    { "text": "Convert ₹10,000 to euros", "gateway": "allows" }
+  ]
+}

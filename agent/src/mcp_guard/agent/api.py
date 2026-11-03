@@ -65,6 +65,7 @@ ROLES: tuple[Role, ...] = ("customer", "staff", "supervisor")
 # A Gateway restarted without GATEWAY_SIGNING_KEY has a new key; look it up again, but not
 # more often than this.
 JWKS_REFRESH_SECONDS = 10
+JWKS_TIMEOUT_SECONDS = 2
 
 _log = logging.getLogger(__name__)
 
@@ -86,17 +87,21 @@ class GatewayKeys:
         self._jwks_url = urljoin(gateway_url, "/.well-known/jwks.json")
         self._keys: list[jwt.PyJWK] = []
         self._fetched_at = -JWKS_REFRESH_SECONDS - 1.0  # never: the first check fetches
+        self._fetching = anyio.Lock()  # one fetch at a time; the others wait for its keys
 
     async def person(self, token: str) -> Person | None:
         """Who an MCP token names, if the Gateway signed it, it is unexpired and for MCP."""
         if not token:
             return None
         person = self._check(token)
-        # Not more often than every few seconds, even while the Gateway is down.
-        if person is None and time.monotonic() - self._fetched_at > JWKS_REFRESH_SECONDS:
-            await self._fetch()
-            person = self._check(token)
-        return person
+        if person is not None:
+            return person
+        async with self._fetching:
+            # Not more often than every few seconds, even while the Gateway is down; a check
+            # that waited for another's fetch tries the keys that fetch brought.
+            if time.monotonic() - self._fetched_at > JWKS_REFRESH_SECONDS:
+                await self._fetch()
+            return self._check(token)
 
     def _check(self, token: str) -> Person | None:
         for key in self._keys:
@@ -119,7 +124,8 @@ class GatewayKeys:
     async def _fetch(self) -> None:
         self._fetched_at = time.monotonic()
         try:
-            async with httpx.AsyncClient() as http:
+            # Short: checks that arrive meanwhile wait for this fetch.
+            async with httpx.AsyncClient(timeout=JWKS_TIMEOUT_SECONDS) as http:
                 reply = await http.get(self._jwks_url)
             reply.raise_for_status()
             self._keys = [jwt.PyJWK(key) for key in reply.json()["keys"]]

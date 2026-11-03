@@ -11,4 +11,5 @@ The Agent forwards the person's own token to the Gateway, so a token alone can't
 
 - The Gateway checks the audience on every route; a token for one audience is refused on the other.
 - The chat UI calls the Gateway's HTTP endpoints directly with the UI token, never through the Agent, so the Gateway allows the frontend's origin (CORS).
+- In development the web app's server (Vite) passes `/gateway/*` and `/agent/*` on, so the browser sees one origin and needs no CORS; how production routes them is decided at deploy (#34, #35).
 - The Gateway never forwards either token to downstream MCP servers.

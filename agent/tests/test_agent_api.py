@@ -50,19 +50,22 @@ def events(reply: httpx.Response) -> list[tuple[str, dict[str, Any]]]:
     return found
 
 
-def ask(api: RunningAgentApi, mcp_token: str, conversation: str, text: str) -> httpx.Response:
+def ask(
+    api: RunningAgentApi, mcp_token: str, conversation: str, text: str, suggested: bool = False
+) -> httpx.Response:
+    # The web app marks a clicked suggested prompt; a typed message carries only its text.
     return httpx.post(
         f"{api.url}/conversations/{conversation}/turns",
-        json={"text": text},
+        json={"text": text, "suggested": True} if suggested else {"text": text},
         headers=bearer(mcp_token),
         timeout=60,
     )
 
 
 def turn(
-    api: RunningAgentApi, mcp_token: str, conversation: str, text: str
+    api: RunningAgentApi, mcp_token: str, conversation: str, text: str, suggested: bool = False
 ) -> list[tuple[str, dict[str, Any]]]:
-    reply = ask(api, mcp_token, conversation, text)
+    reply = ask(api, mcp_token, conversation, text, suggested)
     assert reply.status_code == 200
     assert reply.headers["content-type"].startswith("text/event-stream")
     return events(reply)
@@ -100,6 +103,37 @@ def test_a_turn_streams_each_tool_call_its_decision_and_the_reply(
     assert "₹1,94,844.00" in reply["text"]
     assert (reply["input_tokens"], reply["output_tokens"]) == (0, 0)
     assert reply["estimated_cost"] == 0  # the fake model costs nothing
+
+
+SUGGESTED_PROMPTS = Path(__file__).parents[2] / "web" / "src" / "suggested-prompts.json"
+
+
+def suggested_prompts() -> list[tuple[str, str, str]]:
+    """(person, text, what the Gateway does) for every prompt the web app suggests."""
+    by_person: dict[str, list[dict[str, str]]] = json.loads(SUGGESTED_PROMPTS.read_text())
+    return [(p, s["text"], s["gateway"]) for p, prompts in by_person.items() for s in prompts]
+
+
+@pytest.mark.parametrize(("person", "text", "gateway"), suggested_prompts())
+def test_each_suggested_prompt_gets_the_decision_the_web_app_promises(
+    guarded_gateway: RunningGateway,
+    agent_api: RunningAgentApi,
+    person: str,
+    text: str,
+    gateway: str,
+) -> None:
+    token = login(guarded_gateway, person)["mcp_token"]
+    conversation = open_conversation(agent_api, token)
+
+    steps = turn(agent_api, token, conversation, text, suggested=True)
+
+    decisions = [data["decision"] for name, data in steps if name == "decision"]
+    assert decisions, "the fake model made no Tool call for this prompt"
+    if gateway == "blocks":
+        assert "deny" in decisions
+    else:
+        assert set(decisions) == {"allow"}
+    assert steps[-1][0] == "reply"
 
 
 @pytest.mark.parametrize("question", ["Show me C002's balance", "Show me C002s balance"])
@@ -205,6 +239,29 @@ def test_only_a_gateway_mcp_token_is_accepted(
     reply = httpx.post(f"{agent_api.url}/conversations", headers=bearer(tokens[token]))
 
     assert reply.status_code == 401
+
+
+def test_requests_arriving_together_at_a_fresh_agent_api_are_all_accepted(
+    guarded_gateway: RunningGateway, agent_api: RunningAgentApi
+) -> None:
+    # The first request makes the Agent API fetch the Gateway's public key; the others must
+    # wait for that key, not be refused while it is on its way.
+    tokens = [login(guarded_gateway, person)["mcp_token"] for person in ("C001", "S001", "S004")]
+
+    async def open_all() -> list[int]:
+        async with httpx.AsyncClient() as http:
+            statuses: list[int] = []
+
+            async def open_one(token: str) -> None:
+                reply = await http.post(f"{agent_api.url}/conversations", headers=bearer(token))
+                statuses.append(reply.status_code)
+
+            async with anyio.create_task_group() as group:
+                for token in tokens:
+                    group.start_soon(open_one, token)
+            return statuses
+
+    assert anyio.run(open_all) == [201, 201, 201]
 
 
 def test_a_turn_needs_text(guarded_gateway: RunningGateway, agent_api: RunningAgentApi) -> None:

@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens, extracted from the agreed prototype (.scratch/prototype/flow.html).
+ * Tailwind's own palette and type scale are switched off, so only these names exist:
+ * bg-paper, text-ink-2, border-grid, text-deny, rounded-bubble, text-sm, font-mono, …
+ */
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+
+  /* Ground: light graph paper; sheets are the white surfaces on it */
+  --color-paper: #f2f5f1;
+  --color-paper-2: #fafbf8;
+  --color-sheet: #ffffff;
+  --color-grid: #d6e0da; /* hairlines and graph-paper lines */
+  --color-grid-strong: #a9bab1; /* input borders, hover borders */
+  --color-hover: #e4eaea; /* a row under the pointer */
+  --color-code: #eef2ef; /* inline code and data chips */
+  --color-selection: #cfe0f7;
+
+  /* Ink: text, strongest to quietest (all ≥4.5:1 on paper) */
+  --color-ink: #18202e;
+  --color-ink-2: #4a5566;
+  --color-ink-3: #5c6877;
+
+  /* Rail: the indigo top bar and the person's own messages */
+  --color-rail: #1f2a5c;
+  --color-rail-2: #2b3874;
+  --color-rail-ink: #e6e9f7;
+  --color-rail-ink-2: #aeb6dd;
+
+  /* The four Decisions (fixed by #38): a mark colour, a text-safe ink, a tint behind text */
+  --color-allow: #1e8e4f;
+  --color-allow-ink: #0f5a32;
+  --color-allow-tint: #e3f2e8;
+  --color-redact: #2b78d6;
+  --color-redact-ink: #1a4f91;
+  --color-redact-tint: #e2edfa;
+  --color-hold: #d99a00;
+  --color-hold-ink: #835c00;
+  --color-hold-tint: #fbf0d3;
+  --color-deny: #cf3b3b;
+  --color-deny-ink: #8e2323;
+  --color-deny-tint: #f9e3e1;
+  --color-transit: #18202e; /* a Tool call the Gateway hasn't decided yet */
+  --color-focus: #2b78d6;
+
+  --font-sans: "Archivo", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Type scale (px values from the prototype; 14px body) */
+  --text-*: initial;
+  --text-2xs: 11.5px;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.45;
+  --text-ui: 12.5px; /* chips and small buttons */
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-base--line-height: 1.45;
+  --text-md: 15px;
+  --text-lg: 16px; /* panel headings */
+  --text-brand: 17px;
+  --text-xl: 22px; /* the empty chat's heading, the big verdict */
+  --text-xl--line-height: 1.2;
+
+  /* Spacing stays on Tailwind's 4px step (p-3 = 12px, gap-2 = 8px): the prototype's grid. */
+  --spacing-bar: 56px;
+  --spacing-chat: 400px;
+
+  --radius-*: initial;
+  --radius-xs: 4px; /* inline code */
+  --radius-sm: 6px; /* rows, segmented-control buttons */
+  --radius-md: 8px; /* buttons, cards */
+  --radius-lg: 10px; /* inputs, suggestion buttons */
+  --radius-bubble: 14px; /* chat bubbles */
+  --radius-full: 999px; /* chips */
+
+  --shadow-float: 0 2px 8px rgb(24 32 46 / 0.12);
+  --shadow-sheet: 0 -6px 24px rgb(24 32 46 / 0.1);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font: 400 var(--text-base) / 1.45 var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--color-selection);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  * {
+    scrollbar-color: var(--color-grid-strong) transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@utility graph-paper {
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-grid) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-grid) 45%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+/* "Calling get_balance…": the dots count up while the Gateway decides */
+@utility dots {
+  &::after {
+    content: "";
+    animation: dots 1.2s steps(4) infinite;
+  }
+}
+@keyframes dots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
+}
+@keyframes bob {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}

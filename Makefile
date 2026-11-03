@@ -1,8 +1,9 @@
-.PHONY: install db db-stop reset-bank gateway chat agent-api eval lint typecheck test check
+.PHONY: install db db-stop reset-bank gateway chat agent-api web eval lint typecheck test check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
 	uv sync --locked
+	npm --prefix web ci
 
 # Start local Postgres and wait until it accepts connections
 db:
@@ -33,6 +34,11 @@ chat:
 agent-api:
 	uv run $(if $(wildcard .env),--env-file .env) mcp-guard-agent-api
 
+# Run the web app at http://localhost:5173 (needs make gateway and make agent-api; Vite passes
+# /gateway/* to the Gateway and /agent/* to the Agent API)
+web:
+	npm --prefix web run dev
+
 # Run the Red-team eval (needs make db; it resets the bank in DATABASE_URL for every task).
 # Running it again carries on where it stopped and retries tasks that ended in an error.
 # make eval DEFENCES=off|on [MODEL=<provider:model>] [ONLY=<Attack class or benign>] [LIMIT=<n>]
@@ -46,9 +52,11 @@ lint:
 
 typecheck:
 	uv run pyright
+	npm --prefix web run typecheck
 
 test:
 	uv run pytest
+	npm --prefix web test
 
 # CI runs the same targets
 check: lint typecheck test
