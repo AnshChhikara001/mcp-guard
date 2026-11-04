@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Design tokens, extracted from the agreed prototype (.scratch/prototype/flow.html).
+ * Design tokens, extracted from the agreed prototype of the web app (#38).
  * Tailwind's own palette and type scale are switched off, so only these names exist:
  * bg-paper, text-ink-2, border-grid, text-deny, rounded-bubble, text-sm, font-mono, …
  */
@@ -15,6 +15,8 @@
   --color-sheet: #ffffff;
   --color-grid: #d6e0da; /* hairlines and graph-paper lines */
   --color-grid-strong: #a9bab1; /* input borders, hover borders */
+  --color-grid-faint: #e1e8e3; /* the flow strip's lines to the bank servers */
+  --color-idle: #c9d6cf; /* a check on the flow strip the Tool call hasn't reached */
   --color-hover: #e4eaea; /* a row under the pointer */
   --color-code: #eef2ef; /* inline code and data chips */
   --color-selection: #cfe0f7;

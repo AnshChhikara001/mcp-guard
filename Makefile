@@ -1,4 +1,4 @@
-.PHONY: install db db-stop reset-bank gateway chat agent-api web dev eval lint typecheck test check
+.PHONY: install db db-stop reset-bank gateway chat agent-api web dev eval lint typecheck test e2e check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
@@ -65,5 +65,11 @@ test:
 	uv run pytest
 	npm --prefix web test
 
+# The browser test: a Customer asks for someone else's balance and the flow strip shows the
+# Gateway block it. It starts its own Gateway, Agent API (fake model) and web app over a fresh
+# database (needs make db, and once: npx --prefix web playwright install chromium).
+e2e:
+	npm --prefix web run e2e
+
 # CI runs the same targets
-check: lint typecheck test
+check: lint typecheck test e2e

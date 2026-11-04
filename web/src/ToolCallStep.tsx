@@ -44,8 +44,11 @@ function Tick({ decision }: { decision: Decision | null }) {
   );
 }
 
-/** One Tool call of a turn: what the Agent asked, then the Gateway's Decision. Click for details. */
-export function ToolCallStep({ step, layers }: { step: Step; layers: Layer[] }) {
+/**
+ * One Tool call of a turn: what the Agent asked, then the Gateway's Decision. Click for details;
+ * opening them also calls `onOpen`, which replays this Tool call on the flow strip.
+ */
+export function ToolCallStep({ step, layers, onOpen }: { step: Step; layers: Layer[]; onOpen: () => void }) {
   const [open, setOpen] = useState(false);
   const detailsId = useId();
   const decided = step.decision;
@@ -58,7 +61,10 @@ export function ToolCallStep({ step, layers }: { step: Step; layers: Layer[] }) 
         type="button"
         aria-expanded={open}
         aria-controls={detailsId}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open) onOpen();
+          setOpen(!open);
+        }}
         className="flex w-full items-start gap-2 rounded-sm px-1.5 py-1 text-left text-sm text-ink-2 hover:bg-hover aria-expanded:bg-hover"
       >
         <span className="mt-[5px]">

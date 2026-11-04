@@ -44,3 +44,7 @@ jobs:
         run: make typecheck
       - name: Test
         run: make test
+      - name: Install the browser for the browser test
+        run: npx --prefix web playwright install --with-deps chromium
+      - name: Browser test
+        run: make e2e

@@ -1,6 +1,8 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { Layer } from "./api";
 import { type Chat, type Turn, totals } from "./chat";
+import { FlowStrip } from "./FlowStrip";
+import { stripOf } from "./flow";
 import { DEMO_BANK, INTRO, type PersonId, ROLE_LABEL, ROLES, SUGGESTED } from "./people";
 import { useSession } from "./session";
 import { ToolCallStep } from "./ToolCallStep";
@@ -17,6 +19,14 @@ export function App() {
 function Workspace({ person, onSwitch }: { person: PersonId; onSwitch: (p: PersonId) => void }) {
   const { session, chat, send } = useSession(person);
   const busy = session.status !== "ready" || chat.turns.some((t) => t.running);
+  const layers = session.status === "ready" ? session.layers : null; // null while logging in
+  const checks = layers ?? [];
+  // The strip shows the newest Tool call live, or one the person opened in the chat.
+  const [opened, setOpened] = useState<string | null>(null);
+  const [replays, setReplays] = useState(0);
+  const strip = stripOf(chat, checks, opened);
+  // A new Tool call, a new message or a Replay plays the strip from the start.
+  const replayKey = `${"step" in strip ? strip.step.callId : `message-${chat.turns.length}`}#${replays}`;
 
   return (
     <div className="flex h-full flex-col">
@@ -46,9 +56,13 @@ function Workspace({ person, onSwitch }: { person: PersonId; onSwitch: (p: Perso
           <ChatLog
             person={person}
             chat={chat}
-            layers={session.status === "ready" ? session.layers : []}
+            layers={checks}
             busy={busy}
             onAsk={(text) => send(text, true)}
+            onShow={(callId) => {
+              setOpened(callId);
+              setReplays((n) => n + 1);
+            }}
           />
           {chat.turns.length ? (
             <div className="flex flex-wrap gap-1.5 px-4 pb-2.5">
@@ -67,7 +81,17 @@ function Workspace({ person, onSwitch }: { person: PersonId; onSwitch: (p: Perso
           ) : null}
           <Composer busy={busy} onSend={(text) => send(text, false)} />
         </section>
-        <GatewayPanel person={person} layers={session.status === "ready" ? session.layers : null} />
+        <GatewayPanel person={person} layers={layers}>
+          <FlowStrip
+            strip={strip}
+            layers={checks}
+            replayKey={replayKey}
+            you={session.status === "ready" ? `${ROLE_LABEL[session.role]} ${session.person}` : person}
+            opened={opened !== null}
+            onReplay={() => setReplays((n) => n + 1)}
+            onBackToLive={() => setOpened(null)}
+          />
+        </GatewayPanel>
       </main>
     </div>
   );
@@ -111,8 +135,15 @@ function TopBar({ person, onSwitch, chat }: { person: PersonId; onSwitch: (p: Pe
   );
 }
 
-function ChatLog(props: { person: PersonId; chat: Chat; layers: Layer[]; busy: boolean; onAsk: (text: string) => void }) {
-  const { person, chat, layers, busy, onAsk } = props;
+function ChatLog(props: {
+  person: PersonId;
+  chat: Chat;
+  layers: Layer[];
+  busy: boolean;
+  onAsk: (text: string) => void;
+  onShow: (callId: string) => void;
+}) {
+  const { person, chat, layers, busy, onAsk, onShow } = props;
   const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight, behavior: "smooth" });
@@ -146,18 +177,18 @@ function ChatLog(props: { person: PersonId; chat: Chat; layers: Layer[]; busy: b
           </div>
         </div>
       ) : (
-        chat.turns.map((turn, i) => <TurnView key={i} turn={turn} layers={layers} />)
+        chat.turns.map((turn, i) => <TurnView key={i} turn={turn} layers={layers} onShow={onShow} />)
       )}
     </div>
   );
 }
 
-function TurnView({ turn, layers }: { turn: Turn; layers: Layer[] }) {
+function TurnView({ turn, layers, onShow }: { turn: Turn; layers: Layer[]; onShow: (callId: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="max-w-[85%] self-end rounded-bubble rounded-br-xs bg-rail px-3 py-2 text-rail-ink">{turn.text}</div>
       {turn.steps.map((s) => (
-        <ToolCallStep key={s.callId} step={s} layers={layers} />
+        <ToolCallStep key={s.callId} step={s} layers={layers} onOpen={() => onShow(s.callId)} />
       ))}
       {turn.running && turn.steps.every((s) => s.decision) ? (
         <div aria-label="The Agent is thinking" className="flex gap-1 self-start rounded-bubble rounded-bl-xs border border-grid bg-sheet px-3.5 py-3">
@@ -231,7 +262,7 @@ function Composer({ busy, onSend }: { busy: boolean; onSend: (text: string) => v
   );
 }
 
-function GatewayPanel({ person, layers }: { person: PersonId; layers: Layer[] | null }) {
+function GatewayPanel({ person, layers, children }: { person: PersonId; layers: Layer[] | null; children: ReactNode }) {
   return (
     <section aria-label="The Gateway" className="graph-paper flex min-w-0 flex-col max-[960px]:order-first max-[960px]:border-b max-[960px]:border-grid">
       <div className="border-b border-grid bg-paper px-5 py-3 max-sm:px-4">
@@ -254,6 +285,7 @@ function GatewayPanel({ person, layers }: { person: PersonId; layers: Layer[] | 
           )}
         </p>
       </div>
+      {children}
       <div className="p-5 max-sm:p-4">
         <DemoBank person={person} />
       </div>
