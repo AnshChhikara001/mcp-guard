@@ -29,6 +29,7 @@ make gateway           # the Gateway at http://127.0.0.1:8000/mcp, with the fake
 make chat              # in a second terminal: log in and chat with the Agent as C001 (PERSON=S003, CONVERSATION=)
 make agent-api         # or: the Agent API the web app chats through, at http://127.0.0.1:8001
 make web               # and then: the web app at http://localhost:5173 (needs make gateway and make agent-api)
+make dev               # or all of it in one terminal: Postgres, Gateway, Agent API and web app; Ctrl-C stops all
 make eval              # the Red-team eval with the scripted fake model (MODEL=, DEFENCES=, ONLY=, LIMIT=, PRICE=)
 make check             # ruff, pyright (strict), pytest, tsc and vitest, as CI runs them; tests need make db
 ```

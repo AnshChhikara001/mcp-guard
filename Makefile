@@ -1,4 +1,4 @@
-.PHONY: install db db-stop reset-bank gateway chat agent-api web eval lint typecheck test check
+.PHONY: install db db-stop reset-bank gateway chat agent-api web dev eval lint typecheck test check
 
 # Install Python, all packages and dev tools from the lockfile
 install:
@@ -38,6 +38,13 @@ agent-api:
 # /gateway/* to the Gateway and /agent/* to the Agent API)
 web:
 	npm --prefix web run dev
+
+# Run everything the web app needs in one terminal: Postgres, then the Gateway, the Agent API
+# and the web app, each output line marked with its name. Ctrl-C stops them all, and so does
+# one of them crashing. Open http://localhost:5173. MODEL and MODEL_PRICE work as for agent-api.
+dev: db
+	web/node_modules/.bin/concurrently --kill-others --names gateway,agent,web \
+		--prefix-colors blue,magenta,green "$(MAKE) gateway" "$(MAKE) agent-api" "$(MAKE) web"
 
 # Run the Red-team eval (needs make db; it resets the bank in DATABASE_URL for every task).
 # Running it again carries on where it stopped and retries tasks that ended in an error.
