@@ -116,6 +116,9 @@ def summarise(
         if any(t.group == attack_class for t in attacks)
     ]
     all_attacks = _row(ALL_ATTACKS, attacks, results, price)
+    if all_attacks.not_run:
+        # A rate over the Attacks that ran so far would read as the rate over all of them.
+        all_attacks = all_attacks.model_copy(update={"rate": None})
     benign_row = _row("benign", benign, results, price)
     current = [(t, current_result(t, results)) for t in tasks]
     summary = Summary(
@@ -123,7 +126,7 @@ def summarise(
         defences=defences,
         price=price,
         attack_success_rate=all_attacks.rate,
-        false_block_rate=benign_row.rate,
+        false_block_rate=None if benign_row.not_run else benign_row.rate,
         rows=[*rows, all_attacks, benign_row],
         errors=[
             ItemError(task=t.id, error=r.error or "")
@@ -169,9 +172,12 @@ def _row(group: str, tasks: Sequence[Task], results: dict[str, ItemResult], pric
 def _markdown(summary: Summary) -> str:
     attack_rows = [r for r in summary.rows if r.group != "benign"]
     [benign] = [r for r in summary.rows if r.group == "benign"]
-    lines = [
-        f"# Red-team eval: {summary.model}, Gateway defences {summary.defences}",
-        "",
+    [all_attacks] = [r for r in summary.rows if r.group == ALL_ATTACKS]
+    lines = [f"# Red-team eval: {summary.model}, Gateway defences {summary.defences}", ""]
+    if summary.not_run:
+        have_result = all_attacks.tasks - all_attacks.not_run
+        lines += [f"Partial run: {have_result} of {all_attacks.tasks} Attacks have a result.", ""]
+    lines += [
         f"Cost at ${summary.price.input_per_million:g} per million input tokens and "
         f"${summary.price.output_per_million:g} per million output tokens. Latency is model "
         "time per task. Tasks that ended in an error are left out of the rates.",

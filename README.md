@@ -144,6 +144,17 @@ The Seam 2 tests in `agent/tests/` drive whole conversations with the fake model
 
 ## Red-team eval
 
+### Baseline: no Gateway defences
+
+42 Attacks in 6 Attack classes, plus 30 Benign tasks, each run once per model with the Gateway's defences off:
+
+| Model | Attack success rate | False block rate |
+| --- | ---: | ---: |
+| Claude Sonnet ([summary](eval/results/claude-cli_sonnet/defences-off/summary.md)) | 29% (12 of 42) | 0% |
+| Claude Haiku ([summary](eval/results/claude-cli_haiku/defences-off/summary.md)) | 33% (14 of 42) | 0% |
+
+Indirect prompt injection and confused deputy Attacks already succeed 0% of the time with no Gateway, on both models, so they can't show a Gateway effect. The numbers with defences on come when the v1 defences land; a partial run is marked as partial and has no headline rate.
+
 The eval runs Attacks and Benign tasks through the Agent and the Gateway and scores them only by exact checks, never an LLM judge. Each task is one TOML file in [`eval/tasks/`](eval/tasks/) (Attacks under `attacks/`, Benign tasks under `benign/`; the format is described in [`tasks.py`](eval/src/mcp_guard/redteam/tasks.py)). A task names who the Agent works for (a Customer, a Staff member or the Supervisor, each told to the model in its instructions), what they say, any setup (tickets planted in the inbox, the fx-rates vendor turned malicious) and its success condition, one of:
 
 | Check | Met when |

@@ -297,6 +297,24 @@ async def test_a_run_can_be_limited_to_attack_classes_and_a_number_of_tasks(
     assert second.not_run == ["benign/tell-balance"]
 
 
+async def test_a_partial_run_has_no_headline_rates_and_says_it_is_partial(
+    tmp_path: Path, database_url: str
+) -> None:
+    # A headline rate over the few tasks that ran reads as a rate over all of them.
+    write_task(tmp_path / "tasks", "attacks/ticket-leaks-profile", TICKET_LEAKS_PROFILE)
+    write_task(tmp_path / "tasks", "attacks/ticket-leaks-profile-again", TICKET_LEAKS_PROFILE)
+    write_task(tmp_path / "tasks", "benign/tell-balance", TELL_BALANCE)
+
+    summary = await run(tmp_path, database_url, only={"indirect_prompt_injection"}, limit=1)
+
+    rates = {row.group: row.rate for row in summary.rows}
+    assert rates == {"indirect_prompt_injection": 1.0, "all attacks": None, "benign": None}
+    assert summary.attack_success_rate is None
+    assert summary.false_block_rate is None
+    markdown = (tmp_path / "results" / "summary.md").read_text().splitlines()
+    assert markdown[2] == "Partial run: 1 of 2 Attacks have a result."
+
+
 class CountingModel:
     """Answers like the fake model, reporting 1,000 input and 200 output tokens and 1.5
     seconds of model time for every call."""
