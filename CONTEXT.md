@@ -42,6 +42,7 @@ A security Gateway between an AI Agent and MCP servers. The Agent reaches its to
 - Holds #18 and Taint #19/#21: approved Holds run at approval (ADR 0003).
 - Deploy: Oracle free VM + Neon (ADR 0004).
 - `eval/results/claude-cli_haiku/defences-on/` is partial (8 of 42 Attacks). Do not quote defences-on numbers yet.
+- Before the #26 defences-on run, delete `eval/results/claude-cli_haiku/defences-on/items/`. Resume reuses old results: the fingerprint covers only the Attack's file, not the Gateway code.
 
 ## Gotchas
 - `make dev` needs Postgres up. Tests and the eval reset the bank.
