@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages.tool import tool_call
 from mcp.types import Tool
 
 from conftest import RunningGateway, WritableBank
@@ -13,6 +14,7 @@ from mcp_guard.agent.agent import Agent, start_agent
 from mcp_guard.agent.fake_model import ScriptedModel, demo_script
 from mcp_guard.agent.gateway import login
 from mcp_guard.agent.model import Model
+from mcp_guard.fake_servers.canaries import CANARIES
 from mcp_guard.fake_servers.fx_rates import INJECTED_INSTRUCTIONS
 from mcp_guard.fake_servers.scenarios import set_fx_mode
 
@@ -142,3 +144,32 @@ async def test_every_tool_call_names_its_conversation_in_the_audit_log(
         headers={"Authorization": f"Bearer {supervisor['ui_token']}"},
     ).json()["entries"]
     assert [(e["person"], e["conversation"]) for e in newest] == [("C001", "conversation-audited")]
+
+
+async def test_with_the_defences_on_the_model_and_the_agents_memory_get_pseudonyms_only(
+    guarded_gateway: RunningGateway, database_url: str
+) -> None:
+    seen: list[str] = []
+
+    def script(messages: Sequence[BaseMessage]) -> AIMessage:
+        seen.extend(str(m.content) for m in messages)
+        if isinstance(messages[-1], ToolMessage) or len(messages) > 2:
+            return AIMessage("Here are your details.")
+        return AIMessage(
+            "",
+            tool_calls=[
+                tool_call(name="get_customer_profile", args={"customer_id": "C001"}, id="p")
+            ],
+        )
+
+    async with agent_for(ScriptedModel(script), guarded_gateway, database_url) as agent:
+        await agent.ask("conversation-pii", "What details do you have on me?")
+    seen.clear()
+    # A restarted Agent reads the conversation back from its memory, and sends it to the model.
+    async with agent_for(ScriptedModel(script), guarded_gateway, database_url) as restarted:
+        await restarted.ask("conversation-pii", "Thanks.")
+
+    remembered = "\n".join(seen)
+    assert "<PHONE_1>" in remembered
+    assert [c.value for c in CANARIES if c.value in remembered] == []
+    assert "Ananya Iyer" not in remembered

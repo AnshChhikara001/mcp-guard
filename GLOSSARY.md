@@ -41,7 +41,7 @@ A tool whose definition (name, description, input schema) the Gateway has record
 _Avoid_: Locked, approved tool, whitelisted tool
 
 **Audit log**:
-The append-only record of every Decision the Gateway makes, one Audit entry per Tool call, chained by hash so that editing an entry is detectable.
+The append-only record of every Decision the Gateway makes, one Audit entry per Tool call (and a second, `redact`, when its result held PII), chained by hash so that editing an entry is detectable.
 _Avoid_: Audit trail, log, history
 
 **Audit entry**:

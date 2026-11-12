@@ -1,9 +1,16 @@
 """The Gateway's MCP server: what an Agent connects to.
 
 It lists the downstream servers' tools as its own, asking them afresh on every listing, and
-makes a Decision on every Tool call: Cedar policies (permissions.py) allow it, and it goes,
-unchanged, to the server that owns the tool, or deny it. A denied call never reaches the
-server: the Agent gets an error result with a reason code and a reason it can explain.
+makes a Decision on every Tool call: Cedar policies (permissions.py) allow it, and it goes to
+the server that owns the tool, or deny it. A denied call never reaches the server: the Agent
+gets an error result with a reason code and a reason it can explain.
+
+With the defences on, the Agent never sees PII (pseudonyms.py). The Gateway first restores the
+real values of the Pseudonyms the call names, so Cedar decides on the call as it will be made,
+and denies a call naming a Pseudonym its conversation doesn't know. A result that held PII
+reaches the Agent with Pseudonyms in its place, and makes a second Audit entry, Decision
+`redact`; the result's Decision is then that one. The Audit log keeps the arguments as sent,
+with their Pseudonyms.
 
 Run it with `make gateway`, or `uv run mcp-guard-gateway` (GATEWAY_HOST and GATEWAY_PORT
 pick the address; the default is http://127.0.0.1:8000/mcp). GATEWAY_DEFENCES is `on` (the
@@ -17,7 +24,8 @@ HTTP endpoints (login.py, audit_api.py) are served beside /mcp.
 
 Every Decision is written to the Audit log (audit.py) before an allowed call is forwarded,
 with the conversation the client names in the call's `_meta` (`mcp-guard/conversation`) or
-else its MCP session. A call the log can't record is denied. Each new entry is also sent live
+else its MCP session. A call the log can't record is denied, and a result whose redact the log
+can't record is withheld. Each new entry is also sent live
 to whoever watches `/events` (live.py), with the deny's explanation rebuilt from its reason.
 
 Every Tool call result, allowed or denied, carries the Decision in its `_meta`
@@ -55,9 +63,17 @@ from opentelemetry import trace
 from starlette.applications import Starlette
 from starlette.requests import Request
 
-from mcp_guard.gateway import audit, audit_api, live, login
+from mcp_guard.gateway import audit, audit_api, live, login, pseudonyms
 from mcp_guard.gateway.audit import Entry
-from mcp_guard.gateway.decisions import Allow, Decision, Deny, fields_of
+from mcp_guard.gateway.decisions import (
+    REDACT_EXPLANATION,
+    REDACT_REASON,
+    Allow,
+    Decision,
+    Deny,
+    Redact,
+    fields_of,
+)
 from mcp_guard.gateway.downstream import Downstream, connect
 from mcp_guard.gateway.permissions import (
     EXPLANATIONS,
@@ -67,10 +83,26 @@ from mcp_guard.gateway.permissions import (
     PolicyError,
     configured_policies_dir,
 )
+from mcp_guard.gateway.pii import PiiDetector
+from mcp_guard.gateway.pseudonyms import (
+    REDACT_FAILED,
+    UNKNOWN_PSEUDONYM,
+    Conversation,
+    Pseudonyms,
+    UnknownPseudonym,
+)
 from mcp_guard.gateway.tokens import McpTokenVerifier, Person, Tokens, person_of, signing_key
 from mcp_guard.gateway.tracing import start_tracing, stop_tracing
 
 ALLOWED_WITH_DEFENCES_OFF = Allow("defences_off")
+AUDIT_FAILED = Deny(
+    "gateway", "audit_failed", "The Gateway couldn't record this call, so it wasn't made."
+)
+RESULT_AUDIT_FAILED = Deny(
+    "gateway",
+    "audit_failed",
+    "The Gateway couldn't record what it hid in this call's result, so it withheld the result.",
+)
 
 # Where a client names the conversation a Tool call belongs to, in the call's `_meta`.
 CONVERSATION_META_KEY = "mcp-guard/conversation"
@@ -80,10 +112,11 @@ DECISION_META_KEY = "mcp-guard/decision"
 
 @dataclass(frozen=True)
 class Gateway:
-    """What every request handler needs: the downstream servers, and the policies."""
+    """What every request handler needs: the downstream servers, the policies and Pseudonyms."""
 
     downstream: Downstream
     permissions: Permissions | None  # None with the defences off
+    redactor: Pseudonyms | None  # None with the defences off
     feed: live.Feed
 
 
@@ -100,36 +133,94 @@ async def call_tool(
     span = trace.get_current_span()
     span.set_attributes({"user.id": person.id, "user.roles": [person.role]})
     gateway = ctx.lifespan_context
+    conversation = _conversation(ctx, params)
+    arguments = params.arguments  # as the call will be made, with Pseudonyms restored
     decision: Decision
     if not gateway.downstream.owns(params.name):
         decision = _unknown_tool(params.name)
-    elif gateway.permissions is None:
+    elif gateway.permissions is None or gateway.redactor is None:
         decision = ALLOWED_WITH_DEFENCES_OFF
     else:
-        decision = await gateway.permissions.decide(person, params.name, params.arguments)
+        try:
+            arguments = await gateway.redactor.restore(
+                Conversation(person.id, conversation), arguments
+            )
+            decision = await gateway.permissions.decide(person, params.name, arguments)
+        except UnknownPseudonym:
+            decision = UNKNOWN_PSEUDONYM
+        except (psycopg.Error, OSError):
+            decision = REDACT_FAILED
     entry_id: int | None = None
     try:
+        # The log keeps the arguments as sent, so it never holds what the Pseudonyms hide.
         entry = await gateway.feed.record(
-            person, _conversation(ctx, params), params.name, params.arguments, decision
+            person, conversation, params.name, params.arguments, decision
         )
         entry_id = entry.id
-        span.set_attribute("gateway.audit.id", entry_id)
     except (psycopg.Error, OSError):
-        # Fail closed: a call the Audit log can't record isn't made.
-        decision = Deny(
-            "gateway", "audit_failed", "The Gateway couldn't record this call, so it wasn't made."
-        )
-    span.set_attributes(_decision_attributes(decision))
-    match decision:
-        case Allow():
-            result = await gateway.downstream.call_tool(params.name, params.arguments)
-        case Deny(reason=reason, explanation=explanation):
-            result = CallToolResult(
-                content=[TextContent(text=f"Denied by the Gateway ({reason}): {explanation}")],
-                is_error=True,
+        decision = AUDIT_FAILED  # fail closed: a call the Audit log can't record isn't made
+    if isinstance(decision, Allow):
+        result = await gateway.downstream.call_tool(params.name, arguments)
+        if gateway.redactor is not None:
+            decision, entry_id, result = await _redact(
+                gateway,
+                gateway.redactor,
+                person,
+                conversation,
+                params,
+                result,
+                decision,
+                entry_id,
             )
+    else:
+        result = _refused(decision)
+    if entry_id is not None:
+        span.set_attribute("gateway.audit.id", entry_id)
+    span.set_attributes(_decision_attributes(decision))
     meta = {**(result.meta or {}), DECISION_META_KEY: _decision_meta(decision, entry_id)}
     return result.model_copy(update={"meta": meta})
+
+
+async def _redact(
+    gateway: Gateway,
+    redactor: Pseudonyms,
+    person: Person,
+    conversation: str | None,
+    params: CallToolRequestParams,
+    result: CallToolResult,
+    allowed: Allow,
+    entry_id: int | None,
+) -> tuple[Decision, int | None, CallToolResult]:
+    """The result as the Agent gets it, with Pseudonyms for its PII, and the Decision and Audit
+    entry it carries: a new `redact` entry if it held PII. Fails closed: a result whose PII the
+    Gateway can't replace, or whose redact it can't record, is withheld."""
+    try:
+        redacted = await redactor.redact(
+            Conversation(person.id, conversation), gateway.downstream.server_of(params.name), result
+        )
+    except (psycopg.Error, OSError):
+        return REDACT_FAILED, entry_id, _refused(REDACT_FAILED)
+    if not redacted.counts:
+        return allowed, entry_id, redacted.result
+    decision = Redact(pseudonyms.LAYER, redacted.counts)
+    try:
+        entry = await gateway.feed.record(
+            person, conversation, params.name, params.arguments, decision
+        )
+    except (psycopg.Error, OSError):
+        return RESULT_AUDIT_FAILED, entry_id, _refused(RESULT_AUDIT_FAILED)
+    return decision, entry.id, redacted.result
+
+
+def _refused(decision: Decision) -> CallToolResult:
+    """The error result the Agent gets instead of a call's result."""
+    fields = fields_of(decision)
+    return CallToolResult(
+        content=[
+            TextContent(text=f"Denied by the Gateway ({fields['reason']}): {fields['explanation']}")
+        ],
+        is_error=True,
+    )
 
 
 def _unknown_tool(tool: str) -> Deny:
@@ -140,7 +231,8 @@ def _explain(entry: Entry) -> str | None:
     """A logged deny's explanation, rebuilt from its reason code (the log doesn't keep it)."""
     if entry.reason == "unknown_tool":
         return _unknown_tool(entry.tool).explanation
-    return EXPLANATIONS.get(entry.reason) if entry.reason else None
+    explanations = {**EXPLANATIONS, **pseudonyms.EXPLANATIONS, REDACT_REASON: REDACT_EXPLANATION}
+    return explanations.get(entry.reason) if entry.reason else None
 
 
 def _decision_meta(decision: Decision, entry_id: int | None) -> dict[str, object]:
@@ -179,12 +271,22 @@ def _person(ctx: ServerRequestContext[Gateway]) -> Person:
     return person_of(user.access_token)
 
 
-def app(tokens: Tokens, permissions: Permissions | None, host: str = "127.0.0.1") -> Starlette:
+def app(
+    tokens: Tokens,
+    permissions: Permissions | None,
+    redactor: Pseudonyms | None,
+    host: str = "127.0.0.1",
+) -> Starlette:
     """The Gateway as an ASGI app, serving MCP over streamable HTTP at /mcp.
 
-    With `permissions` None, the defences are off.
+    With `permissions` and `redactor` None, the defences are off.
     """
-    layers = [] if permissions is None else [live.Layer(LAYER, LAYER_NAME)]
+    # In the order a Tool call meets them: Pseudonyms are restored before Cedar decides.
+    layers = (
+        []
+        if permissions is None
+        else [live.Layer(pseudonyms.LAYER, pseudonyms.LAYER_NAME), live.Layer(LAYER, LAYER_NAME)]
+    )
     feed = live.Feed(_explain)
 
     @asynccontextmanager
@@ -192,7 +294,7 @@ def app(tokens: Tokens, permissions: Permissions | None, host: str = "127.0.0.1"
         try:
             async with connect() as downstream:
                 feed.learn_servers(downstream.server_of)
-                yield Gateway(downstream, permissions, feed)
+                yield Gateway(downstream, permissions, redactor, feed)
         finally:
             # uvicorn ends the process with the signal that stopped it, so exit hooks never run.
             stop_tracing()
@@ -241,10 +343,13 @@ def main() -> None:
         sys.exit(str(e))
     try:
         audit.setup()
+        pseudonyms.setup()
     except psycopg.Error as e:
-        sys.exit(f"Couldn't set up the Audit log in DATABASE_URL: {e}")
+        sys.exit(f"Couldn't set up the Audit log and Pseudonyms in DATABASE_URL: {e}")
+    # Loading the spaCy model takes a few seconds, so it happens once, before serving.
+    redactor = Pseudonyms(PiiDetector()) if defences == "on" else None
     start_tracing("mcp-guard-gateway")
-    gateway = app(Tokens(key, f"http://{host}:{port}"), permissions, host)
+    gateway = app(Tokens(key, f"http://{host}:{port}"), permissions, redactor, host)
     # Open /events streams never end by themselves, so shutdown doesn't wait for them long.
     uvicorn.run(gateway, host=host, port=port, timeout_graceful_shutdown=SHUTDOWN_SECONDS)
 

@@ -1,4 +1,4 @@
-"""Finds Indian PII in text, using Presidio with a medium-sized spaCy model."""
+"""Finds Indian PII, email addresses and person names in text, with Presidio and spaCy."""
 
 from dataclasses import dataclass
 
@@ -11,15 +11,18 @@ from presidio_analyzer import (
 )
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_analyzer.predefined_recognizers import (
+    EmailRecognizer,
     InAadhaarRecognizer,
     InGstinRecognizer,
     InPanRecognizer,
     InPassportRecognizer,
     InVehicleRegistrationRecognizer,
     InVoterRecognizer,
+    SpacyRecognizer,
 )
 
-# The Indian identifiers are found by patterns; the model matters for person names, which
+# The model is the medium-sized spaCy one. The Indian identifiers are found by patterns; the
+# model matters for person names, which
 # Pseudonyms need. On sentences with Indian names the medium model (about 40 MB) found the full
 # name 85% of the time against 73% for the small one. Presidio's default large model needs
 # about 600 MB more memory.
@@ -44,8 +47,11 @@ def _pattern_recognizer(
 
 
 def _recognizers() -> list[EntityRecognizer]:
-    """Presidio's own Indian recognizers, plus ours for identifiers Presidio doesn't know."""
+    """Presidio's own Indian recognizers, plus ours for identifiers Presidio doesn't know, and
+    email addresses and person names (from the spaCy model)."""
     return [
+        SpacyRecognizer(supported_entities=["PERSON"]),
+        EmailRecognizer(),
         InAadhaarRecognizer(),  # validates the Verhoeff check digit
         InPanRecognizer(),
         InGstinRecognizer(),
@@ -131,21 +137,39 @@ class PiiDetector:
             registry=registry, nlp_engine=nlp_engine, supported_languages=["en"]
         )
 
-    def find(self, text: str) -> list[PiiMatch]:
+    def find(self, text: str, context: list[str] | None = None) -> list[PiiMatch]:
         """Every piece of PII in the text, in the order it appears.
 
+        `context` adds words that count as nearby, such as the JSON key the text is the value
+        of: in `{"account_number": "50100912345678"}` the word "account" is never next to the
+        digits.
+
         Where matches overlap (ten digits can be a phone and an account number), only the one
-        with the highest score is kept, so each piece of text has one entity type.
+        with the highest score is kept, so each piece of text has one entity type. A pattern
+        match always beats a person name: the spaCy model sometimes calls a PAN, or a run of
+        JSON, a name, with a higher score than the pattern's. A "name" with a digit in it is
+        dropped: the model calls a bare ID such as "A001" a person, and names have no digits.
         """
         results = self._analyzer.analyze(
             text=text,
             language="en",
             entities=list(ENTITY_TYPES),
             score_threshold=SCORE_THRESHOLD,
+            context=context,
         )
         kept: list[PiiMatch] = []
+        results = [
+            r
+            for r in results
+            if r.entity_type != "PERSON" or not any(ch.isdigit() for ch in text[r.start : r.end])
+        ]
         for result in sorted(
-            results, key=lambda result: (-result.score, result.start - result.end)
+            results,
+            key=lambda result: (
+                result.entity_type == "PERSON",
+                -result.score,
+                result.start - result.end,
+            ),
         ):
             if all(result.end <= match.start or match.end <= result.start for match in kept):
                 kept.append(

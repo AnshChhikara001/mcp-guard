@@ -55,7 +55,11 @@ def test_layers_names_the_checks_switched_on_in_order(guarded_gateway: RunningGa
     reply = httpx.get(f"{guarded_gateway.base_url}/layers")
 
     assert reply.status_code == 200
-    assert reply.json() == [{"id": "cedar", "name": "Permissions"}]
+    # Pseudonyms are restored before Cedar decides, so Redact comes first.
+    assert reply.json() == [
+        {"id": "redact", "name": "Redact"},
+        {"id": "cedar", "name": "Permissions"},
+    ]
 
 
 def test_with_the_defences_off_no_check_is_switched_on(gateway: RunningGateway) -> None:
@@ -199,19 +203,22 @@ async def test_after_a_reconnect_last_event_id_resends_the_missed_entries(
         await client.call_tool("get_balance", {"account_id": "A002"})
 
     async with watching(guarded_gateway, "C001", last_event_id=seen) as events:
-        missed = [await events.next(), await events.next()]
+        missed = [await events.next(), await events.next(), await events.next()]
         async with gateway_client(guarded_gateway, "C001") as client:
             await client.call_tool("list_transactions", {"account_id": "A001"})
         live = await events.next()
 
+    # The account numbers in list_accounts' result make a second entry, a redact.
     assert [(e["tool"], e["decision"]) for e in missed] == [
         ("list_accounts", "allow"),
+        ("list_accounts", "redact"),
         ("get_balance", "deny"),
     ]
     assert missed[0]["server"] == "accounts"
-    assert missed[1]["explanation"].startswith("Not found, or not yours")
+    assert missed[1]["redacted"] == {"ACCOUNT_NUMBER": 1}
+    assert missed[2]["explanation"].startswith("Not found, or not yours")
     assert live["tool"] == "list_transactions"
-    assert missed[0]["id"] < missed[1]["id"] < live["id"]
+    assert missed[0]["id"] < missed[1]["id"] < missed[2]["id"] < live["id"]
 
 
 @pytest.mark.parametrize("last_event_id", [b"abc", "²".encode("latin-1"), b"-1", b"9" * 30])

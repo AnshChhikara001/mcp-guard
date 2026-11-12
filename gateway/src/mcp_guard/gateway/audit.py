@@ -5,12 +5,15 @@ so resetting the bank leaves them alone. The Gateway creates the schema, table a
 startup if they are missing (setup()). It only ever inserts: a trigger rejects any update,
 delete or truncate, so changing an entry takes a database admin who turns the trigger off.
 
+A call whose result held PII gets a second entry, Decision `redact`, with `redacted`: how many
+pieces of each type the Agent got as Pseudonyms (see pseudonyms.py), never the values.
+
 Each entry's hash is SHA-256 over canonical JSON (sorted keys, no spaces) of its fields and the
-previous entry's hash; the first entry's previous hash is 64 zeros. verify() walks the chain
-and names the first entry whose hash or link doesn't match. The hash has no key, so someone
-who edits an entry and then rewrites every hash after it goes undetected, and deleting the
-newest entry leaves no break. Entries are written one at a time, under a table lock, and
-numbered in order.
+previous entry's hash (`redacted` only when it is set, so entries older than it still verify);
+the first entry's previous hash is 64 zeros. verify() walks the chain and names the first entry
+whose hash or link doesn't match. The hash has no key, so someone who edits an entry and then
+rewrites every hash after it goes undetected, and deleting the newest entry leaves no break.
+Entries are written one at a time, under a table lock, and numbered in order.
 """
 
 import hashlib
@@ -25,7 +28,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
-from mcp_guard.gateway.decisions import Decision, fields_of
+from mcp_guard.gateway.decisions import Decision, Redact, fields_of
 from mcp_guard.gateway.tokens import Person
 
 LOCAL_DATABASE_URL = "postgresql://mcpguard:mcpguard@localhost:5432/mcpguard"
@@ -54,6 +57,9 @@ CREATE TABLE IF NOT EXISTS gateway.audit (
     hash          text NOT NULL
 );
 
+-- Added with Pseudonyms; a log made before them gets the column here.
+ALTER TABLE gateway.audit ADD COLUMN IF NOT EXISTS redacted json;
+
 CREATE OR REPLACE FUNCTION gateway.audit_is_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -71,10 +77,10 @@ CREATE OR REPLACE TRIGGER audit_is_never_truncated
 """
 
 COLUMNS: LiteralString = (
-    "id, time, person, role, conversation, tool, arguments, decision, reason, layer,"
+    "id, time, person, role, conversation, tool, arguments, decision, reason, layer, redacted,"
     " previous_hash, hash"
 )
-PLACEHOLDERS: LiteralString = "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s"
+PLACEHOLDERS: LiteralString = "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s"
 
 
 @dataclass(frozen=True)
@@ -88,9 +94,10 @@ class Entry:
     conversation: str | None
     tool: str
     arguments: dict[str, Any]
-    decision: str  # allow or deny
-    reason: str | None  # the reason code of a deny
+    decision: str  # allow, deny or redact
+    reason: str | None  # the reason code of a deny or redact
     layer: str  # the layer that decided
+    redacted: dict[str, int] | None  # a redact's count of Pseudonyms per type
     previous_hash: str
     hash: str
 
@@ -122,9 +129,16 @@ def setup() -> None:
 
 
 def entry_hash(fields: Mapping[str, Any]) -> str:
-    """SHA-256 of canonical JSON of an entry's fields (with its previous hash, not its own)."""
+    """SHA-256 of canonical JSON of an entry's fields (with its previous hash, not its own).
+
+    `redacted` counts only when set, so an entry written before the column existed still
+    hashes the same."""
     canonical = json.dumps(
-        {name: value for name, value in fields.items() if name != "hash"},
+        {
+            name: value
+            for name, value in fields.items()
+            if name != "hash" and not (name == "redacted" and value is None)
+        },
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
@@ -170,12 +184,16 @@ async def record(
             "decision": decided["decision"],
             "reason": decided["reason"],
             "layer": decided["layer"],
+            "redacted": dict(decision.counts) if isinstance(decision, Redact) else None,
             "previous_hash": previous_hash,
         }
         fields["hash"] = entry_hash(fields)
         await conn.execute(
             f"INSERT INTO gateway.audit ({COLUMNS}) VALUES ({PLACEHOLDERS})",
-            [Json(v) if k == "arguments" else v for k, v in fields.items()],
+            [
+                Json(v) if k in ("arguments", "redacted") and v is not None else v
+                for k, v in fields.items()
+            ],
         )
     return Entry(**fields)
 

@@ -3,7 +3,9 @@
 Each task runs alone: the bank is reset to its seeded state, the task's setup is applied, a
 fresh Gateway is started over it (with its defences off or on), the task's Customer, Staff
 member or Supervisor logs in to it, and the Agent talks to it for them. When the conversation
-ends, the task's check is read from the bank.
+ends, the task's check is read from the bank. With the defences on, the Agent's replies hold
+Pseudonyms such as <PHONE_1>; a reply check reads them with the conversation's real values, as
+the chat UI reveals them to the person.
 
 A model call that fails ends the task as an error, which counts towards no rate. The Agent
 has no step limit of its own, so the eval stops a conversation after MAX_MODEL_CALLS model
@@ -28,6 +30,7 @@ from mcp_guard.agent.model import Model, ModelCallFailed
 from mcp_guard.fake_servers.reset import reset
 from mcp_guard.fake_servers.scenarios import plant_ticket, set_fx_mode
 from mcp_guard.gateway.process import start_gateway
+from mcp_guard.gateway.pseudonyms import Conversation, reveal
 from mcp_guard.redteam.fake import FAKE
 from mcp_guard.redteam.results import (
     OUTCOMES,
@@ -113,10 +116,12 @@ async def _run_task(
             except _CallLimitReached:
                 stopped = True
 
+    conversation = Conversation(task.spec.person.id, conversation_id)
+    revealed = [await reveal(conversation, reply, database_url) for reply in replies]
     outcome = (
         "error"
         if error is not None
-        else OUTCOMES[task.kind, is_met(task.spec.success, database_url, replies)]
+        else OUTCOMES[task.kind, is_met(task.spec.success, database_url, revealed)]
     )
     return ItemResult(
         task=task.id,

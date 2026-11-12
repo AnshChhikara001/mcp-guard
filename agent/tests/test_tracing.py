@@ -182,10 +182,12 @@ def test_one_turn_is_one_trace_across_agent_model_gateway_and_downstream(
         # The Gateway knows who makes the call from their token.
         assert call.attributes["user.id"] == "C001"
         assert call.attributes["user.roles"] == ["customer"]
-        assert call.attributes["gateway.decision.layer"] == "cedar"
-    [allowed] = [s for s in received if s.attributes["gateway.decision"] == "allow"]
+    # The allowed call's result held an account number, so its final Decision is a redact.
+    [allowed] = [s for s in received if s.attributes["gateway.decision"] == "redact"]
     [denied] = [s for s in received if s.attributes["gateway.decision"] == "deny"]
-    assert "gateway.decision.reason" not in allowed.attributes
+    assert allowed.attributes["gateway.decision.layer"] == "redact"
+    assert allowed.attributes["gateway.decision.reason"] == "pii_in_result"
+    assert denied.attributes["gateway.decision.layer"] == "cedar"
     assert denied.attributes["gateway.decision.reason"] == "not_found_or_not_yours"
     # Only the allowed call reaches the server.
     [downstream] = [
