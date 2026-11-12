@@ -92,8 +92,9 @@ def test_a_turn_streams_each_tool_call_its_decision_and_the_reply(
         "arguments": {"customer_id": "C001"},
     }
     assert steps[1][1]["call_id"] == steps[0][1]["call_id"]  # the Decision on that call
-    assert steps[1][1]["decision"] == "allow"
-    assert steps[1][1]["layer"] == "cedar"
+    # The accounts' numbers are PII, so the Agent got them as Pseudonyms.
+    assert steps[1][1]["decision"] == "redact"
+    assert steps[1][1]["layer"] == "redact"
     assert isinstance(steps[1][1]["audit_id"], int)
     assert (steps[2][1]["tool"], steps[2][1]["arguments"]) == (
         "get_balance",
@@ -132,7 +133,8 @@ def test_each_suggested_prompt_gets_the_decision_the_web_app_promises(
     if gateway == "blocks":
         assert "deny" in decisions
     else:
-        assert set(decisions) == {"allow"}
+        # A redact goes through too: only the PII in the result is hidden.
+        assert set(decisions) <= {"allow", "redact"}
     assert steps[-1][0] == "reply"
 
 

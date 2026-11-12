@@ -82,7 +82,7 @@ Tools take account, transaction or ticket IDs, not the Customer they belong to, 
 
 ### Audit log
 
-Every Tool call's Decision is written to the Audit log, one Audit entry per call, before an allowed call is forwarded: the person and role, the conversation, the tool and its arguments as sent, the Decision, its reason code, the layer that decided, and the time (UTC, to the microsecond). That includes calls to unknown tools and calls made with the defences off (`allow`, layer `defences_off`); listing tools writes nothing, and the tool's result isn't kept. If an entry can't be written, the call is denied (`audit_failed`) and never reaches the server. The entry's number goes on the call's span as `gateway.audit.id`.
+Every Tool call's Decision is written to the Audit log, one Audit entry per call, before an allowed call is forwarded: the person and role, the conversation, the tool and its arguments as sent, the Decision, its reason code, the layer that decided, and the time (UTC, to the microsecond). That includes calls to unknown tools and calls made with the defences off (`allow`, layer `defences_off`); listing tools writes nothing, and the tool's result isn't kept. If an entry can't be written, the call is denied (`audit_failed`) and never reaches the server. A call whose result held PII gets a second entry (see [Pseudonyms](#pseudonyms)). The entry's number goes on the call's span as `gateway.audit.id`.
 
 The conversation is the one a client names in each Tool call's `_meta` under `mcp-guard/conversation`, as the Agent and the Red-team eval do. A client that names none is logged under its MCP session ID; a client on MCP protocol 2026-07-28, which has no sessions, is logged with no conversation.
 
@@ -95,6 +95,22 @@ curl -s localhost:8000/audit/verify -H "Authorization: Bearer $UI_TOKEN"
 ```
 
 What the chain can't catch: the hash has no secret key, so a database admin who edits an entry and then rewrites the hash of every entry after it goes undetected, and deleting the newest entry leaves no break (deleting any other shows as a break at the entry after it).
+
+### Pseudonyms
+
+With the defences on, the Agent, its model and its memory never see a Customer's PII ([ADR-0002](docs/adr/0002-pseudonyms-instead-of-a-self-hosted-llm.md)). Before a Tool call result reaches the Agent, the Gateway replaces each piece of PII in it with a Pseudonym, its type and a counter per type:
+
+```json
+{"customer_id": "C001", "name": "<NAME_1>", "phone": "<PHONE_1>", "email": "<EMAIL_1>", "aadhaar": "<AADHAAR_1>", ...}
+```
+
+Known PII fields (a profile's name, date of birth, email, phone, address, Aadhaar, PAN and UPI ID, and an account's number) are always replaced whole. Every other string, such as a ticket's subject and body, is scanned by [Presidio](https://microsoft.github.io/presidio/) with Indian recognizers, email addresses and person names from spaCy's `en_core_web_md`. An IFSC stays readable: it is a public branch code.
+
+The same text gets the same Pseudonym throughout a conversation; in another conversation `<PHONE_1>` means something else. When the Agent passes a Pseudonym into a Tool call, the Gateway puts the real value back, in any string argument, also inside a longer text, before Cedar decides, so Cedar judges the call as it will be made: `send_sms(to="<PHONE_1>")` is allowed only if that phone is one the person may text. A Pseudonym the conversation never got is denied (`unknown_pseudonym`). Pseudonyms belong to the Person and the conversation together, so another Person who names the same conversation gets none of them. They are kept in `gateway.pseudonyms`, so they survive a Gateway restart; a call that names no conversation gets Pseudonyms that are never stored.
+
+A result that held PII adds a second Audit entry for the same Tool call: Decision `redact`, reason `pii_in_result`, and `redacted`, a count per type such as `{"PHONE": 1}`, never the values. The Audit log keeps arguments as the Agent sent them, with their Pseudonyms. If the `redact` entry can't be written, the Agent gets an error instead of the result. With `GATEWAY_DEFENCES=off`, results pass through unchanged.
+
+Known limits: restoring a value doesn't stop exfiltration, since an allowed call carries the real value wherever it goes (Taint is meant for that). PII the Person types into the chat never passes the Gateway, so the model sees it. Names in free text, such as a ticket body, are found only by the spaCy model, which found the full name 85% of the time on sentences with Indian names. Text shaped like a Pseudonym in a result (a ticket that says `<AADHAAR_1>`) reaches the Agent as it is.
 
 The Seam 1 tests in `gateway/tests/` start the real Gateway against a freshly seeded database and call it as an MCP client, logged in. Most of them check what the servers do, so their Gateway has its defences off; the permission tests use one with its defences on.
 

@@ -25,6 +25,9 @@ EXAMPLES: tuple[Example, ...] = (
     Example("Send the refund to priya.k92@okaxis.", (("IN_UPI_ID", "priya.k92@okaxis"),)),
     Example("UPI: rahul_sharma-7@ybl", (("IN_UPI_ID", "rahul_sharma-7@ybl"),)),
     Example("Use IFSC HDFC0001234 for NEFT.", (("IN_IFSC", "HDFC0001234"),)),
+    # An email address, not a UPI ID: there is a dot after the name.
+    Example("Email ananya.iyer@example.com", (("EMAIL_ADDRESS", "ananya.iyer@example.com"),)),
+    Example("Please call Rohan Mehta back today.", (("PERSON", "Rohan Mehta"),)),
     Example(
         "Reach karan.shah31@fakebank or +91 9448123456",  # the seeded bank's formats
         (("IN_UPI_ID", "karan.shah31@fakebank"), ("IN_PHONE", "+91 9448123456")),
@@ -90,10 +93,10 @@ LOOK_ALIKES: tuple[Example, ...] = (
     Example("Use IFSC HDFC1001234 for NEFT.", ()),  # fifth character must be a zero
     Example("Order ORDR0012345 was placed", ()),  # shaped like an IFSC, but nothing says it is
     Example("GSTIN 99AAGCR4375J1ZU", ()),  # there is no state 99
-    Example("Email ananya.iyer@example.com", ()),  # an email address, not a UPI ID
     Example("Call 12345 67890", ()),  # Indian mobiles start with 6-9
     Example("Order 4021886519 shipped on 12/03/2026", ()),  # digits, but no account context
     Example("Ticket TK001 for customer C001, transaction T00012, account A001", ()),
+    Example("A001", ()),  # a bare ID, which the spaCy model calls a person
     Example("Refund of Rs 25000 approved", ()),
     # Messy cases written separately from the rules.
     Example("My Aadhaar number is 2345 6789 0123", ()),  # fails the Verhoeff check
