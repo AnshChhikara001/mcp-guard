@@ -1,0 +1,16 @@
+#!/bin/sh
+# Pre-commit gate: the fast, offline half of make check (lint, format, types; about 4 s).
+# Tests stay in make check and CI, because they need Postgres (make db).
+# Enabled by make install. By hand: git config core.hooksPath .githooks
+# Skip once, for a work-in-progress commit only: git commit --no-verify
+set -e
+unset VIRTUAL_ENV  # an outer venv must not replace this repo's .venv
+echo "pre-commit: ruff check, ruff format --check, pyright"
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked pyright
+# tsc only when the commit touches the web app, so Python-only commits stay fast.
+if git diff --cached --name-only | grep -q '^web/'; then
+  echo "pre-commit: web typecheck"
+  npm --prefix web run --silent typecheck
+fi

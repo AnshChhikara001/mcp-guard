@@ -1,9 +1,10 @@
 .PHONY: install db db-stop reset-bank gateway chat agent-api web dev eval lint typecheck test e2e check
 
-# Install Python, all packages and dev tools from the lockfile
+# Install Python, all packages and dev tools from the lockfile, and turn on the pre-commit gate
 install:
 	uv sync --locked
 	npm --prefix web ci
+	git config core.hooksPath .githooks
 
 # Start local Postgres and wait until it accepts connections
 db:
