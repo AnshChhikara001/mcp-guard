@@ -1,12 +1,12 @@
 # CONTEXT: mcp-guard
 
-A cold-session map. Read it before the code. Terms: `GLOSSARY.md`. Decisions: `docs/adr/0001`–`0006`.
+A cold-session map. Read it before the code. Terms: `GLOSSARY.md`. Decisions: `docs/adr/0001`–`0006`. Review rules: `CODING_STANDARDS.md`.
 
 ## Purpose
 A security Gateway between an AI Agent and MCP servers. The Agent reaches its tools only through the Gateway. The Gateway decides every Tool call (Cedar permissions) and records it in a hash-chained Audit log. A fake Indian bank (6 MCP servers) is the target. The Red-team eval measures attacks with defences off and on.
 
 ## Run it
-- `make install` (uv + npm), then `make db` (Postgres in Docker). Settings: copy `.env.example` to `.env`.
+- `make install` (uv + npm + the pre-commit gate: ruff, format, pyright), then `make db` (Postgres in Docker). Settings: copy `.env.example` to `.env`.
 - `make dev`: Gateway :8000/mcp + Agent API :8001 + web app :5173. Without `MODEL`, a scripted fake model runs.
 - `make chat PERSON=C001|S003|S004`: chat in the terminal, as a Customer, Staff member or Supervisor.
 - `make eval DEFENCES=off|on [MODEL=…] [ONLY=…] [LIMIT=n]`: resumes where it stopped.
@@ -34,8 +34,6 @@ A security Gateway between an AI Agent and MCP servers. The Agent reaches its to
 ## Conventions
 - GitHub Issues via `gh`, one ticket per feature branch. Labels: `docs/agents/triage-labels.md`.
 - Python 3.13, ruff, pyright strict, pytest. TS: tsc, vitest, Playwright.
-- Every module starts with a one-line docstring that says its role. Keep it so.
-- Commit subjects are one plain sentence about what a user can now do.
 
 ## Hot zones (v1)
 - Redact: Pseudonyms in results done (#16). Next: authorised reveal in the chat UI (#17), via `pseudonyms.reveal`.
