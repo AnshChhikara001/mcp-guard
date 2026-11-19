@@ -1,0 +1,143 @@
+<title>mcp-guard Progress</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column of panels; summary first (v1 + map), then evidence (eval), then history (tickets, concepts). */
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --ink:#18202b; --muted:#5d6878; --line:#dde2ea; --accent:#2f5bd3;
+  --done:#1f8a4c; --wip:#b07a12; --todo:#8a94a3; --bad:#c23b33;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10151c; --panel:#171e28; --ink:#e6ebf2; --muted:#9aa6b6; --line:#2a3442; --accent:#7ea0ff;
+  --done:#4cc282; --wip:#e0ad45; --todo:#748094; --bad:#ef6b62; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10151c; --panel:#171e28; --ink:#e6ebf2; --muted:#9aa6b6; --line:#2a3442; --accent:#7ea0ff;
+  --done:#4cc282; --wip:#e0ad45; --todo:#748094; --bad:#ef6b62; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+main{max-width:860px;margin:0 auto;display:grid;gap:20px}
+h1,h2{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:2rem;letter-spacing:-.01em}
+h2{font-size:1.1rem}
+.sub{color:var(--muted);margin:4px 0 0;max-width:65ch}
+.meta{font:12px var(--mono);color:var(--muted);margin-top:8px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px;min-width:0}
+.label{font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.pill{font:600 11px var(--mono);padding:2px 7px;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.s-done{color:var(--done)}.s-wip{color:var(--wip)}.s-todo{color:var(--todo)}
+.v1list{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.v1list li{display:flex;gap:10px;align-items:baseline}
+.box{font:600 13px var(--mono);width:1.2em;flex:none}
+.bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.map{display:grid;grid-template-columns:1fr auto 1.6fr auto 1fr;gap:10px;align-items:stretch}
+.col{display:grid;gap:6px;align-content:start;min-width:0}
+.arrow{align-self:center;color:var(--muted);font:600 18px var(--mono)}
+.node{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;gap:2px;min-width:0}
+.node.v1{border-color:var(--accent)}
+.node .n{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-weight:700;font-size:14px}
+.node .n .pill{flex:none;line-height:1.4}
+.node .d{color:var(--muted);font-size:12.5px}
+.support{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font:600 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.hi{color:var(--bad);font-weight:700}.zero{color:var(--done)}.na{color:var(--todo)}
+.note{color:var(--muted);font-size:13px;margin:0;max-width:70ch}
+.ticket{border-top:1px solid var(--line);padding-top:10px;display:grid;gap:4px}
+.ticket:first-of-type{border-top:0;padding-top:0}
+.ticket .t{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-weight:700}
+.ticket code{font:12px var(--mono);color:var(--muted)}
+.kv{display:grid;grid-template-columns:5.5em 1fr;gap:2px 10px;font-size:13.5px}
+.kv b{font:600 11px var(--mono);color:var(--muted);text-transform:uppercase;padding-top:2px}
+.concepts{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.card{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:6px;align-content:start;min-width:0}
+.card h3{margin:0;font-size:14.5px}
+.card p{margin:0;font-size:13.5px}
+.card code{font:11.5px var(--mono);color:var(--accent);overflow-wrap:anywhere}
+details summary{cursor:pointer;font-size:13px;color:var(--accent)}
+details summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:640px){.map{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
+</style>
+
+<main id="app"></main>
+
+<script id="data" type="application/json">/*DATA*/null</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent || 'null');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pill = s => `<span class="pill s-${s}">${s}</span>`;
+const app = document.getElementById('app');
+if (!D) { app.innerHTML = '<section><p>No data yet. Run <code>python3 progress/build.py</code>.</p></section>'; }
+else {
+  const done = D.v1.filter(x => x.done).length;
+  const node = c => `<div class="node${c.v1 ? ' v1' : ''}"><div class="n"><span>${esc(c.name)}</span>${pill(c.status)}</div>${c.note ? `<div class="d">${esc(c.note)}</div>` : ''}</div>`;
+  const group = g => D.components.filter(c => c.group === g).map(node).join('');
+  const cell = v => { if (!v) return '<td class="na">–</td>'; const r = v[0] / v[1]; return `<td class="${v[0] === 0 ? 'zero' : r >= .5 ? 'hi' : ''}">${v[0]}/${v[1]}</td>`; };
+  const nice = k => k.replace(/_/g, ' ');
+  const total = r => { const vs = Object.values(r.attacks); if (!vs.length) return null; return [vs.reduce((a, v) => a + v[0], 0), vs.reduce((a, v) => a + v[1], 0)]; };
+  app.innerHTML = `
+  <header>
+    <div class="label">Project progress</div>
+    <h1>${esc(D.project)}</h1>
+    <p class="sub">${esc(D.pitch)}</p>
+    <div class="meta">updated ${esc(D.updated)} · ${D.tickets.length} tickets logged · ${D.concepts.length} concepts</div>
+  </header>
+
+  <section aria-labelledby="v1h">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h2 id="v1h">v1: applications start here</h2><span class="label">${done}/${D.v1.length}</span></div>
+    <div class="bar"><i style="width:${100 * done / D.v1.length}%"></i></div>
+    <ul class="v1list">${D.v1.map(x => `<li><span class="box ${x.done ? 's-done' : 's-todo'}">${x.done ? '✓' : '○'}</span>${esc(x.item)}</li>`).join('')}</ul>
+  </section>
+
+  <section aria-labelledby="maph">
+    <h2 id="maph">Architecture</h2>
+    <p class="note">Every Tool call crosses the Gateway. Blue outline = needed for v1.</p>
+    <div class="map">
+      <div class="col"><div class="label">Agent</div>${group('agent')}</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="col"><div class="label">Gateway layers</div>${group('gateway')}</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="col"><div class="label">MCP servers</div>${group('servers')}</div>
+    </div>
+    <div class="label">Around it</div>
+    <div class="support">${group('support')}</div>
+  </section>
+
+  <section aria-labelledby="evh">
+    <h2 id="evh">Eval scoreboard</h2>
+    <p class="note">Attacks succeeded / scored. Lower is better. False blocks = Benign tasks not done. ${esc(D.eval.note)}</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Attack class</th>${D.eval.runs.map(r => `<th>${esc(r.label)}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${D.eval.classes.map(k => `<tr><td>${nice(k)}</td>${D.eval.runs.map(r => cell(r.attacks[k])).join('')}</tr>`).join('')}
+        <tr><td><b>all scored attacks</b></td>${D.eval.runs.map(r => cell(total(r))).join('')}</tr>
+        <tr><td>false blocks</td>${D.eval.runs.map(r => { const b = r.benign; const fb = b[1] - b[0]; return `<td class="${fb ? 'hi' : 'zero'}">${fb}/${b[1]}</td>`; }).join('')}</tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section aria-labelledby="tkh">
+    <h2 id="tkh">Ticket timeline</h2>
+    ${[...D.tickets].reverse().map(t => `<div class="ticket">
+      <div class="t"><span>${esc(t.title)}</span><code>${esc(t.id)}</code></div>
+      <div class="kv"><b>what</b><span>${esc(t.what)}</span><b>how</b><span>${esc(t.how)}</span><b>why</b><span>${esc(t.why)}</span>${t.rejected ? `<b>rejected</b><span>${esc(t.rejected)}</span>` : ''}</div>
+    </div>`).join('')}
+  </section>
+
+  <section aria-labelledby="cch">
+    <h2 id="cch">Concepts learned</h2>
+    <div class="concepts">${D.concepts.map((c, i) => `<div class="card">
+      <h3>${esc(c.name)}</h3><p>${esc(c.plain)}</p><code>${esc(c.where)}</code>
+      <p class="note">Trade-off: ${esc(c.tradeoff)}</p>
+      <details id="q${i}"><summary>${esc(c.q)}</summary><p>${esc(c.a)}</p></details>
+    </div>`).join('')}</div>
+  </section>`;
+}
+</script>
