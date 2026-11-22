@@ -10,6 +10,13 @@ not the Customer they belong to, so the Gateway first looks up in the bank who o
 call names. Cedar denies anything no policy permits, so a tool with no policy is denied, and
 so is a tool the Gateway doesn't know how to look up. An ID the bank doesn't have is denied
 with the same reason as someone else's, so the Agent can't probe which IDs exist.
+
+Cedar also decides a Reveal (reveal_api.py): whether a Person in the chat UI may see the real
+value behind a Pseudonym. The Gateway looks up the Customers whose own detail the value is,
+and the Person may see it if they may act for one of them. Who owns a value is found by
+matching it, not by where it came from: a Pseudonym doesn't remember which call made it. A
+value that is no Customer's detail (a name in a ticket that matches nobody) is no one's to
+reveal, so it stays hidden.
 """
 
 import os
@@ -47,10 +54,17 @@ NOT_PERMITTED = Deny(
     LAYER, "not_permitted", "The person you work for may not use this tool in their role."
 )
 NO_RULE = Deny(LAYER, "no_rule", "No policy allows this tool, so the Gateway blocks it.")
+NOT_YOURS_TO_SEE = Deny(
+    LAYER,
+    "not_yours_to_see",
+    "Only the Customer whose detail this is, Staff who serve them, or a Supervisor may see it.",
+)
 # Each reason code's explanation: the log stores the code, and the explanation is rebuilt.
 EXPLANATIONS: Mapping[str, str] = {
-    d.reason: d.explanation for d in (NOT_YOURS, RECIPIENT_NOT_ALLOWED, NOT_PERMITTED, NO_RULE)
+    d.reason: d.explanation
+    for d in (NOT_YOURS, RECIPIENT_NOT_ALLOWED, NOT_PERMITTED, NO_RULE, NOT_YOURS_TO_SEE)
 }
+REVEAL = "reveal"
 
 type _Entity = dict[str, Any]  # an entity in Cedar's JSON form
 type _Finder = Callable[[Mapping[str, object]], Awaitable[list[_Entity] | None]]
@@ -86,15 +100,29 @@ class Permissions:
         if resource is None:
             return rule.denied
         principal = await _principal(person)
+        return Allow(LAYER) if self._allows(principal, tool, resource) else rule.denied
+
+    async def reveal(self, person: Person, value: str) -> Decision:
+        """Whether `person` may see `value`, the real value behind a Pseudonym in their chat."""
+        owners = await bank.customers_with_pii(value)
+        principal = await _principal(person)
+        # A value Customers share (one name) is as much one's as the other's: any one will do.
+        for owner in sorted(owners):
+            if self._allows(principal, REVEAL, [_entity("Customer", owner)]):
+                return Allow(LAYER)
+        return NOT_YOURS_TO_SEE
+
+    def _allows(self, principal: list[_Entity], action: str, resource: list[_Entity]) -> bool:
+        """Cedar's answer: may the first entity of `principal` take `action` on the first of
+        `resource`? The other entities are what the policies may look at."""
         request = {
             "principal": principal[0]["uid"],
-            "action": {"type": "Action", "id": tool},
+            "action": {"type": "Action", "id": action},
             "resource": resource[0]["uid"],
             "context": {},
         }
         entities = list({_key(e): e for e in principal + resource}.values())
-        result = is_authorized(request, self._policies, entities, schema=self._schema)
-        return Allow(LAYER) if result.allowed else rule.denied
+        return is_authorized(request, self._policies, entities, schema=self._schema).allowed
 
 
 def configured_policies_dir() -> Path:

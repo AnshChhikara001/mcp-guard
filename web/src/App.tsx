@@ -1,9 +1,10 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import type { Layer } from "./api";
+import type { Layer, Revealed } from "./api";
 import { type Chat, type Turn, totals } from "./chat";
 import { FlowStrip } from "./FlowStrip";
 import { stripOf } from "./flow";
 import { DEMO_BANK, INTRO, type PersonId, ROLE_LABEL, ROLES, SUGGESTED } from "./people";
+import { RevealableText } from "./RevealableText";
 import { useSession } from "./session";
 import { ToolCallStep } from "./ToolCallStep";
 
@@ -17,7 +18,7 @@ export function App() {
 }
 
 function Workspace({ person, onSwitch }: { person: PersonId; onSwitch: (p: PersonId) => void }) {
-  const { session, chat, send } = useSession(person);
+  const { session, chat, send, reveal } = useSession(person);
   const busy = session.status !== "ready" || chat.turns.some((t) => t.running);
   const layers = session.status === "ready" ? session.layers : null; // null while logging in
   const checks = layers ?? [];
@@ -59,6 +60,7 @@ function Workspace({ person, onSwitch }: { person: PersonId; onSwitch: (p: Perso
             layers={checks}
             busy={busy}
             onAsk={(text) => send(text, true)}
+            onReveal={reveal}
             onShow={(callId) => {
               setOpened(callId);
               setReplays((n) => n + 1);
@@ -141,9 +143,10 @@ function ChatLog(props: {
   layers: Layer[];
   busy: boolean;
   onAsk: (text: string) => void;
+  onReveal: (pseudonym: string) => Promise<Revealed>;
   onShow: (callId: string) => void;
 }) {
-  const { person, chat, layers, busy, onAsk, onShow } = props;
+  const { person, chat, layers, busy, onAsk, onReveal, onShow } = props;
   const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight, behavior: "smooth" });
@@ -177,13 +180,19 @@ function ChatLog(props: {
           </div>
         </div>
       ) : (
-        chat.turns.map((turn, i) => <TurnView key={i} turn={turn} layers={layers} onShow={onShow} />)
+        chat.turns.map((turn, i) => <TurnView key={i} turn={turn} layers={layers} onShow={onShow} onReveal={onReveal} />)
       )}
     </div>
   );
 }
 
-function TurnView({ turn, layers, onShow }: { turn: Turn; layers: Layer[]; onShow: (callId: string) => void }) {
+function TurnView(props: {
+  turn: Turn;
+  layers: Layer[];
+  onShow: (callId: string) => void;
+  onReveal: (pseudonym: string) => Promise<Revealed>;
+}) {
+  const { turn, layers, onShow, onReveal } = props;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="max-w-[85%] self-end rounded-bubble rounded-br-xs bg-rail px-3 py-2 text-rail-ink">{turn.text}</div>
@@ -204,7 +213,7 @@ function TurnView({ turn, layers, onShow }: { turn: Turn; layers: Layer[]; onSho
       {turn.reply ? (
         <>
           <div className="max-w-[92%] self-start rounded-bubble rounded-bl-xs border border-grid bg-sheet px-3 py-2.5 whitespace-pre-wrap">
-            {turn.reply.text}
+            <RevealableText text={turn.reply.text} onReveal={onReveal} />
           </div>
           <div className="pl-1 text-2xs text-ink-3">
             {count.format(turn.reply.tokens)} tokens

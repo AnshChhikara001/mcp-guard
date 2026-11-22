@@ -6,7 +6,9 @@ startup if they are missing (setup()). It only ever inserts: a trigger rejects a
 delete or truncate, so changing an entry takes a database admin who turns the trigger off.
 
 A call whose result held PII gets a second entry, Decision `redact`, with `redacted`: how many
-pieces of each type the Agent got as Pseudonyms (see pseudonyms.py), never the values.
+pieces of each type the Agent got as Pseudonyms (see pseudonyms.py), never the values. A
+Reveal in the chat UI gets an entry too, with tool `reveal` and the Pseudonym as its argument
+(see reveal_api.py).
 
 Each entry's hash is SHA-256 over canonical JSON (sorted keys, no spaces) of its fields and the
 previous entry's hash (`redacted` only when it is set, so entries older than it still verify);

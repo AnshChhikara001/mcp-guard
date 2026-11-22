@@ -15,7 +15,7 @@ A security Gateway between an AI Agent and MCP servers. The Agent reaches its to
 ## Layout (uv workspace, package `mcp_guard.*`)
 | Folder | Role | Key files |
 |---|---|---|
-| `gateway/` | MCP server towards Agents, HTTP API for the web app | `server.py` (call_tool), `permissions.py` (Cedar), `audit.py`, `tokens.py` (Ed25519 JWTs), `downstream.py`, `live.py`, `pii.py` (Presidio), `pseudonyms.py` (Redact) |
+| `gateway/` | MCP server towards Agents, HTTP API for the web app | `server.py` (call_tool), `permissions.py` (Cedar), `audit.py`, `tokens.py` (Ed25519 JWTs), `downstream.py`, `live.py`, `pii.py` (Presidio), `pseudonyms.py` (Redact), `reveal_api.py` (Reveal) |
 | `gateway/policies/` | Cedar rules per role | `customer/staff/supervisor/everyone.cedar`, `schema.cedarschema` |
 | `agent/` | LangGraph Agent + Agent API (SSE turns) | `agent.py`, `api.py`, `gateway.py` (login + MCP client), `adapters.py`, `fake_model.py` |
 | `fake_servers/` | 6 seeded bank MCP servers | `bank.py` (fixed seed), `canaries.py`, `scenarios.py` (plant Attacks), `outbound.py` |
@@ -36,7 +36,7 @@ A security Gateway between an AI Agent and MCP servers. The Agent reaches its to
 - Python 3.13, ruff, pyright strict, pytest. TS: tsc, vitest, Playwright.
 
 ## Hot zones (v1)
-- Redact: Pseudonyms in results done (#16). Next: authorised reveal in the chat UI (#17), via `pseudonyms.reveal`.
+- Redact: Pseudonyms in results (#16) and Reveal (#17) done. `POST /reveal` (`reveal_api.py`, UI token) asks Cedar (`permissions.py` `reveal`, action `reveal` in `ActForCustomer`) whether the viewer may see the Customer whose detail the value is (`bank.customers_with_pii`). The chat shows each Pseudonym as a button (`web/src/RevealableText.tsx`).
 - Holds #18 and Taint #19/#21: approved Holds run at approval (ADR 0003).
 - Deploy: Oracle free VM + Neon (ADR 0004).
 - `eval/results/claude-cli_haiku/defences-on/` is partial (8 of 42 Attacks). Do not quote defences-on numbers yet.

@@ -17,7 +17,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from mcp_guard.gateway import bank
-from mcp_guard.gateway.tokens import Person, Tokens
+from mcp_guard.gateway.tokens import Audience, Person, Tokens
 
 
 def routes(tokens: Tokens) -> list[Route]:
@@ -60,10 +60,19 @@ def routes(tokens: Tokens) -> list[Route]:
 
 def ui_person(request: Request, tokens: Tokens) -> Person | None:
     """Who the request's UI token names; None without a valid one (an MCP token isn't one)."""
+    return _bearer_person(request, tokens, "ui")
+
+
+def mcp_person(request: Request, tokens: Tokens) -> Person | None:
+    """Who the request's MCP token names, on an endpoint that refuses it but logs who tried."""
+    return _bearer_person(request, tokens, "mcp")
+
+
+def _bearer_person(request: Request, tokens: Tokens, audience: Audience) -> Person | None:
     scheme, _, token = request.headers.get("Authorization", "").partition(" ")
     if scheme.lower() != "bearer":
         return None
-    return tokens.check(token, "ui")
+    return tokens.check(token, audience)
 
 
 def ui_token_required() -> JSONResponse:

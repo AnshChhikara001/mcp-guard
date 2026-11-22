@@ -1,10 +1,13 @@
 // What the Gateway's Cedar policies talk about. The Gateway validates every policy against
 // this schema when it starts, and refuses to start if one doesn't fit.
 //
-// The principal is the Person the Agent works for. Each action is one tool. The resource is
-// what the Tool call touches, looked up in the bank from the call's arguments: the Customer
-// who owns the account, transaction or profile, the Customer whose registered email or phone
-// a message goes to, the ticket, the inbox, or the currency vendor.
+// The principal is the Person the Agent works for. Each action is one tool, except `reveal`.
+// The resource is what the Tool call touches, looked up in the bank from the call's arguments:
+// the Customer who owns the account, transaction or profile, the Customer whose registered
+// email or phone a message goes to, the ticket, the inbox, or the currency vendor.
+//
+// `reveal` is the chat UI showing a Person the real value behind a Pseudonym (reveal_api.py).
+// Its principal is that Person, and its resource the Customer whose own detail the value is.
 
 entity Customer;
 entity Staff {
@@ -39,6 +42,10 @@ action get_ticket in [ReadInbox]
 
 action list_tickets in [ReadInbox]
   appliesTo { principal: [Customer, Staff, Supervisor], resource: Inbox };
+
+// Seeing a Customer's data is acting for them, so the same people may do it.
+action reveal in [ActForCustomer]
+  appliesTo { principal: [Customer, Staff, Supervisor], resource: Customer };
 
 action convert
   appliesTo { principal: [Customer, Staff, Supervisor], resource: Vendor };

@@ -263,6 +263,13 @@ async def reveal(conversation: Conversation, text: str, database_url: str | None
     return PSEUDONYM.sub(lambda m: values.get(m[0], m[0]), text)
 
 
+async def value_of(conversation: Conversation, pseudonym: str) -> str | None:
+    """The real value behind one Pseudonym of the conversation, or None if it never got it."""
+    if not conversation.id:
+        return None
+    return (await _values_of(conversation, [pseudonym])).get(pseudonym)
+
+
 async def _connect(database_url: str | None = None) -> psycopg.AsyncConnection[Any]:
     return await psycopg.AsyncConnection.connect(
         database_url or _database_url(), connect_timeout=CONNECT_TIMEOUT_SECONDS
