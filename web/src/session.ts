@@ -15,6 +15,8 @@ import {
   login,
   me,
   openConversation,
+  type Revealed,
+  reveal as askToReveal,
   takeTurn,
 } from "./api";
 import { type ChatEvent, emptyChat, step } from "./chat";
@@ -60,16 +62,16 @@ export function useSession(personId: string) {
     };
   }, [personId]);
 
-  /** Runs `call` with the MCP token; if the token was refused, logs in again and retries once. */
-  const withMcpToken = useCallback(
-    async <T,>(call: (mcpToken: string) => Promise<T>): Promise<T> => {
+  /** Runs `call` with one of the tokens; if it was refused, logs in again and retries once. */
+  const withToken = useCallback(
+    async <T,>(kind: "mcpToken" | "uiToken", call: (token: string) => Promise<T>): Promise<T> => {
       if (!tokens.current) throw new Error("Not logged in yet.");
       try {
-        return await call(tokens.current.mcpToken);
+        return await call(tokens.current[kind]);
       } catch (e) {
         if (!(e instanceof Unauthorized)) throw e;
         tokens.current = await login(personId);
-        return await call(tokens.current.mcpToken);
+        return await call(tokens.current[kind]);
       }
     },
     [personId],
@@ -80,7 +82,7 @@ export function useSession(personId: string) {
       if (session.status !== "ready") return;
       dispatch({ type: "ask", text });
       try {
-        const body = await withMcpToken((token) =>
+        const body = await withToken("mcpToken", (token) =>
           takeTurn(
             token,
             session.conversationId,
@@ -99,10 +101,23 @@ export function useSession(personId: string) {
         dispatch({ type: "failed", message: problem(e) });
       }
     },
-    [session, withMcpToken],
+    [session, withToken],
   );
 
-  return { session, chat, send };
+  /** The real value behind a Pseudonym in this conversation, if the Gateway lets this person see it. */
+  const reveal = useCallback(
+    async (pseudonym: string): Promise<Revealed> => {
+      if (session.status !== "ready") return { hidden: "Not logged in yet." };
+      try {
+        return await withToken("uiToken", (token) => askToReveal(token, session.conversationId, pseudonym));
+      } catch (e) {
+        return { hidden: problem(e) };
+      }
+    },
+    [session, withToken],
+  );
+
+  return { session, chat, send, reveal };
 }
 
 function problem(e: unknown): string {

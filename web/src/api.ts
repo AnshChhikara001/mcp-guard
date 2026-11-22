@@ -99,3 +99,20 @@ export async function takeTurn(
   if (!reply.body) throw new Refused(reply.status, "The Agent sent no steps.");
   return reply.body;
 }
+
+/** What the Gateway answered to a reveal: the real value, or why it stays hidden. */
+export type Revealed = { value: string } | { hidden: string };
+
+/** Asks the Gateway for the real value behind a Pseudonym in this conversation (UI token). */
+export async function reveal(uiToken: string, conversationId: string, pseudonym: string): Promise<Revealed> {
+  const reply = await fetch("/gateway/reveal", {
+    method: "POST",
+    headers: { ...json, ...bearer(uiToken) },
+    body: JSON.stringify({ conversation: conversationId, pseudonym }),
+  });
+  if (reply.status === 403) {
+    const body = (await reply.json()) as { explanation?: unknown };
+    return { hidden: typeof body.explanation === "string" ? body.explanation : "You may not see it." };
+  }
+  return (await (await check(reply)).json()) as { value: string };
+}

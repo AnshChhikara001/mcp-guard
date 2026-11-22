@@ -32,6 +32,10 @@ _Avoid_: Mask, sanitize, scrub
 A placeholder like `<PHONE_1>` that stands for one piece of a Customer's PII, so the model reasons over the placeholder and never sees the real value.
 _Avoid_: Token (collides with Login token), mask, placeholder
 
+**Reveal**:
+The chat UI showing a viewer the real value behind one Pseudonym in their own conversation, if Cedar lets them see that Customer's data; asked with a UI token only, and recorded as an Audit entry with tool `reveal`.
+_Avoid_: Unmask, de-anonymise, decrypt
+
 **Taint**:
 The state of a conversation after the Agent has read untrusted content; while tainted, any Tool call that could send data outside the bank is held.
 _Avoid_: Contaminated, flagged, unsafe
@@ -41,7 +45,7 @@ A tool whose definition (name, description, input schema) the Gateway has record
 _Avoid_: Locked, approved tool, whitelisted tool
 
 **Audit log**:
-The append-only record of every Decision the Gateway makes, one Audit entry per Tool call (and a second, `redact`, when its result held PII), chained by hash so that editing an entry is detectable.
+The append-only record of every Decision the Gateway makes, one Audit entry per Tool call (and a second, `redact`, when its result held PII) and per Reveal, chained by hash so that editing an entry is detectable.
 _Avoid_: Audit trail, log, history
 
 **Audit entry**:

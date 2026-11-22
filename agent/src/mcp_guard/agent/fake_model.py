@@ -42,6 +42,9 @@ def demo_script(person_id: str) -> Script:
       Naming a Customer ("C002's balance") or an account ("A002") asks about theirs instead.
     - "My last 5 transactions" lists the accounts, then each one's latest transactions.
     - "Convert ₹10,000 to USD" converts with the currencies in the order they are named.
+    - "What phone number do you have for me?" reads the profile and says its phone, which the
+      Gateway hands over as a Pseudonym (`<PHONE_1>`) for the web app to reveal. Naming a
+      Customer ("C002's phone") asks about theirs instead.
     - "What was that in paise?" is answered only from a balance fetched earlier in the
       conversation, so it gets a right answer only if the Agent remembers that earlier turn.
 
@@ -73,6 +76,9 @@ def demo_script(person_id: str) -> Script:
                 return _call_tools(*calls)
             case "list_transactions":
                 return AIMessage("\n\n".join(_transactions(json.loads(r.text)) for r in results))
+            case "get_customer_profile":
+                profile = json.loads(results[0].text)
+                return AIMessage(f"The phone number on file is {profile['phone']}.")
             case "convert":
                 c = json.loads(results[0].text)
                 return AIMessage(
@@ -113,13 +119,22 @@ def _first_step(text: str, person_id: str, messages: Sequence[BaseMessage]) -> A
         return _convert(text)
     if "balance" in question and (account := ACCOUNT_ID.search(text)):
         return _call_tools(_call("get_balance", account_id=account.group().upper()))
+    if "phone" in question:
+        return _call_tools(
+            _call("get_customer_profile", customer_id=_customer_named(text, person_id))
+        )
     if "balance" in question or "transaction" in question:
-        customer = CUSTOMER_ID.search(text)
-        customer_id = customer.group().upper() if customer else person_id
-        return _call_tools(_call("list_accounts", customer_id=customer_id))
+        return _call_tools(_call("list_accounts", customer_id=_customer_named(text, person_id)))
     return AIMessage(
-        "I can tell you a balance, list recent transactions, or convert between currencies."
+        "I can tell you a balance or the phone number on file, list recent transactions, or"
+        " convert between currencies."
     )
+
+
+def _customer_named(text: str, person_id: str) -> str:
+    """The Customer the question names, or else the person asking."""
+    customer = CUSTOMER_ID.search(text)
+    return customer.group().upper() if customer else person_id
 
 
 def _convert(text: str) -> AIMessage:

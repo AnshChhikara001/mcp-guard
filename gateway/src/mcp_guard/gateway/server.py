@@ -20,7 +20,8 @@ defences; with them off, no policy is asked and every call is allowed.
 Every MCP request must carry the person's MCP token (see tokens.py): the MCP SDK's bearer auth
 refuses one without it, so the Gateway knows the person and role behind every Tool call. The
 login check runs with the defences on or off: it is identity, not a defence. The Gateway's
-HTTP endpoints (login.py, audit_api.py) are served beside /mcp.
+HTTP endpoints (login.py, audit_api.py, live.py, and with the defences on reveal_api.py) are
+served beside /mcp.
 
 Every Decision is written to the Audit log (audit.py) before an allowed call is forwarded,
 with the conversation the client names in the call's `_meta` (`mcp-guard/conversation`) or
@@ -63,7 +64,7 @@ from opentelemetry import trace
 from starlette.applications import Starlette
 from starlette.requests import Request
 
-from mcp_guard.gateway import audit, audit_api, live, login, pseudonyms
+from mcp_guard.gateway import audit, audit_api, live, login, pseudonyms, reveal_api
 from mcp_guard.gateway.audit import Entry
 from mcp_guard.gateway.decisions import (
     REDACT_EXPLANATION,
@@ -231,7 +232,12 @@ def _explain(entry: Entry) -> str | None:
     """A logged deny's explanation, rebuilt from its reason code (the log doesn't keep it)."""
     if entry.reason == "unknown_tool":
         return _unknown_tool(entry.tool).explanation
-    explanations = {**EXPLANATIONS, **pseudonyms.EXPLANATIONS, REDACT_REASON: REDACT_EXPLANATION}
+    explanations = {
+        **EXPLANATIONS,
+        **pseudonyms.EXPLANATIONS,
+        **reveal_api.EXPLANATIONS,
+        REDACT_REASON: REDACT_EXPLANATION,
+    }
     return explanations.get(entry.reason) if entry.reason else None
 
 
@@ -322,6 +328,7 @@ def app(
             *login.routes(tokens),
             *audit_api.routes(tokens),
             *live.routes(tokens, layers, feed),
+            *([] if permissions is None else reveal_api.routes(tokens, permissions, feed)),
         ],
     )
 

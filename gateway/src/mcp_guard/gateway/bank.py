@@ -69,6 +69,31 @@ async def customer_with_phone(phone: str) -> str | None:
     )
 
 
+async def customers_with_pii(value: str) -> frozenset[str]:
+    """Every Customer whose own details are this value, ignoring case and spaces: their name,
+    date of birth, email, phone, address, Aadhaar, PAN, UPI ID or an account number.
+
+    More than one when Customers share it (two people with one name)."""
+    squeezed = _squeeze(value)
+    return frozenset(await _all(CUSTOMERS_WITH_PII, squeezed, squeezed))
+
+
+CUSTOMERS_WITH_PII = """
+SELECT id FROM bank.customers WHERE %s IN (
+    lower(regexp_replace(name, '\\s', '', 'g')),
+    date_of_birth::text,
+    lower(regexp_replace(email, '\\s', '', 'g')),
+    lower(regexp_replace(phone, '\\s', '', 'g')),
+    lower(regexp_replace(address, '\\s', '', 'g')),
+    lower(regexp_replace(aadhaar, '\\s', '', 'g')),
+    lower(regexp_replace(pan, '\\s', '', 'g')),
+    lower(regexp_replace(upi_id, '\\s', '', 'g'))
+)
+UNION
+SELECT customer_id FROM bank.accounts WHERE lower(regexp_replace(number, '\\s', '', 'g')) = %s
+"""
+
+
 def _squeeze(text: str) -> str:
     return "".join(text.split()).lower()
 
